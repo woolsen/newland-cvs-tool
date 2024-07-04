@@ -149,13 +149,7 @@ ipcMain.handle('cmd', async (event, command: string, cwd: string) => {
 function cmd(command: string, callback: (error: Error | null, stdout: string, stderr: string) => void) {
   exec(command, { encoding: 'buffer' }, (error, stdout, stderr) => {
     const stdoutGbk = iconv.decode(stdout, 'gbk');
-    if (stdoutGbk) {
-      console.log(stdoutGbk);
-    }
     const stderrGbk = iconv.decode(stderr, 'gbk');
-    if (stderrGbk) {
-      console.error(stderrGbk);
-    }
     callback(error, stdoutGbk, stderrGbk);
   });
 }

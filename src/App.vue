@@ -1,24 +1,41 @@
 <script lang="ts" setup>
-import {reactive, ref} from 'vue'
+import {computed, onMounted, reactive, ref} from 'vue'
 import {message as antMessage, notification, TableProps} from "ant-design-vue";
-import {Key} from "ant-design-vue/es/table/interface";
-import {commit, CVS_STATUS, getStatus, updateTag} from "./utils/cvs";
+import {Key, type TableRowSelection} from "ant-design-vue/es/table/interface";
+import {commit, getStatus, updateTag} from "./utils/cvs";
+import TagStore from "./store/tag";
+import {CompleteText, FileDetail} from "./utils/bean";
+import { CloseOutlined } from '@ant-design/icons-vue';
 
-class FileDetail {
-  name: string
-  path: string
-  tag?: string
-  status?: CVS_STATUS | 'loading' | 'error'
+let allTags: string[] = []
 
-  constructor(name: string, path: string) {
-    this.name = name
-    this.path = path
-  }
-}
-
-const files = ref<FileDetail[]>([])
 const message = ref<string>('')
+const tags = ref<CompleteText[]>([])
 const tag = ref<string>('')
+const files = ref<FileDetail[]>([])
+
+const rowSelection: TableRowSelection<FileDetail> = reactive({
+  selectedRowKeys: [],
+  onChange: (selectedRowKeys: Key[], selectedRows: FileDetail[]) => {
+    console.log('selectedRowKeys changed: ', selectedRowKeys);
+    files.value.forEach(f => f.selected = selectedRowKeys.includes(f.path))
+    rowSelection.selectedRowKeys = selectedRowKeys
+  },
+  getCheckboxProps: (record: FileDetail) => ({
+    disabled: record.status === 'error',
+  }),
+})
+
+onMounted(() => {
+  allTags = TagStore.getTags()
+  if (!allTags.length) {
+    return
+  }
+  tags.value = allTags.map(t => new CompleteText(t))
+  tag.value = allTags.length ? allTags[0] : ''
+  files.value = TagStore.getTagFiles(tag.value)
+  rowSelection.selectedRowKeys = files.value.filter(f => f.selected).map(f => f.path)
+})
 
 const columns: TableProps<FileDetail>['columns'] = [
   {
@@ -44,19 +61,6 @@ const buttonState = reactive({
   commitLoading: false
 })
 
-const fileTableState = reactive<{
-  selectedRowKeys: Key[];
-  loading: boolean;
-}>({
-  selectedRowKeys: [],
-  loading: false,
-});
-
-const onSelectChange = (selectedRowKeys: Key[]) => {
-  console.log('selectedRowKeys changed: ', selectedRowKeys);
-  fileTableState.selectedRowKeys = selectedRowKeys;
-};
-
 const updateStatus = async (file: FileDetail) => {
   try {
     file.status = await getStatus(file.path)
@@ -64,6 +68,24 @@ const updateStatus = async (file: FileDetail) => {
     console.error(e)
     file.status = 'error'
   }
+};
+
+const onTagSearch = (value: string) => {
+  tags.value = allTags.filter(t => t.includes(value)).map(t => new CompleteText(t))
+}
+
+const onTagSelect = (value: string) => {
+  tag.value = value
+  const filesValue = TagStore.getTagFiles(tag.value)
+  if (filesValue.length) {
+    files.value = filesValue
+  }
+};
+
+const onTagDelete = (value: string) => {
+  TagStore.removeTag(value)
+  allTags = TagStore.getTags()
+  tags.value = allTags.map(t => new CompleteText(t))
 };
 
 const handleDrop = (e: DragEvent) => {
@@ -82,7 +104,6 @@ function addFile(file: File) {
   }
   const detail = new FileDetail(file.name, file.path);
   files.value.push(detail);
-  fileTableState.selectedRowKeys.push(detail.path);
   updateStatus(detail).then(() => {
     files.value = [...files.value];
   });
@@ -96,7 +117,9 @@ const handleDelete = (path: Key) => {
 }
 
 const handleCommit = async () => {
-  if (!fileTableState.selectedRowKeys.length) {
+  const filesValue = files.value
+  const filesToCommit = filesValue.filter(f => f.selected)
+  if (!filesToCommit.length) {
     antMessage.error('请选择文件')
     return
   }
@@ -104,8 +127,11 @@ const handleCommit = async () => {
     antMessage.error('TAG不能为空')
     return
   }
+  if (!/^[a-zA-Z]/.test(tag.value)) {
+    antMessage.error('TAG必须以字母开头')
+    return
+  }
   buttonState.commitLoading = true
-  const filesToCommit = files.value.filter(f => fileTableState.selectedRowKeys.includes(f.path))
   const messageKey = 'commit';
   antMessage.loading({content: '提交中...', key: messageKey, duration: 0});
   console.log('commit file:', filesToCommit)
@@ -140,6 +166,11 @@ const handleCommit = async () => {
   }
   antMessage.success({content: '提交完成', key: messageKey, duration: 2});
   console.log('commit done')
+
+  let tagsValue = TagStore.addTag(tag.value)
+  tags.value = tagsValue.map(t => new CompleteText(t))
+  TagStore.setTagFiles(tag.value, filesValue)
+
   buttonState.commitLoading = false
 }
 </script>
@@ -147,15 +178,17 @@ const handleCommit = async () => {
 <template>
   <div style="width: 100%" @dragover.prevent="() => {}" @drop.prevent="handleDrop">
     <a-table :columns="columns" :data-source="files" :pagination="false"
-             :row-selection="{ selectedRowKeys: fileTableState.selectedRowKeys, onChange: onSelectChange}"
+             :row-selection="rowSelection"
              rowKey="path" size="small">
       <template #bodyCell="{ column, record }">
         <template v-if="column.dataIndex === 'status'">
-          <a-tag v-if="record.status"
-                 :color="record.status === 'error' ? 'red' : 'green'">
+          <a-spin v-if="record.status === 'loading'"/>
+          <a-tag v-else-if="record.status === 'error'" color="red">
             {{ record.status }}
           </a-tag>
-          <a-spin v-else/>
+          <a-tag v-else color="green">
+            {{ record.status }}
+          </a-tag>
         </template>
         <template v-else-if="column.dataIndex === 'action'">
           <a @click="() => handleDelete(record.path)">删除</a>
@@ -176,11 +209,18 @@ const handleCommit = async () => {
     <a-form-item
         label="TAG*"
         name="tag">
-      <a-input v-model:value="tag" placeholder="请输入TAG"/>
+      <a-auto-complete v-model:value="tag" :options="tags" allow-clear placeholder="请输入TAG"
+                       @search="onTagSearch" @select="onTagSelect">
+        <template #option="item">
+          <div style="display: flex; justify-content: space-between; align-items: center">
+            <span>{{ item.value }}</span>
+            <close-outlined @click.prevent="() => onTagDelete(item.value)"/>
+          </div>
+        </template>
+      </a-auto-complete>
     </a-form-item>
     <a-form-item style="margin-left: 80px">
       <a-button :loading="buttonState.commitLoading"
-                style="width: 100%; "
                 type="primary" @click="handleCommit">提交
       </a-button>
     </a-form-item>
