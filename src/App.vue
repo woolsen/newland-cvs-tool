@@ -1,11 +1,11 @@
 <script lang="ts" setup>
-import {computed, onMounted, reactive, ref} from 'vue'
-import {message as antMessage, notification, TableProps} from "ant-design-vue";
+import {onMounted, reactive, ref} from 'vue'
+import {message as antMessage, Modal, notification, TableProps} from "ant-design-vue";
 import {Key, type TableRowSelection} from "ant-design-vue/es/table/interface";
-import {commit, getStatus, updateTag} from "./utils/cvs";
+import {commit, getHistory, getStatus, updateTag} from "./utils/cvs";
 import TagStore from "./store/tag";
 import {CompleteText, FileDetail} from "./utils/bean";
-import { CloseOutlined } from '@ant-design/icons-vue';
+import {CloseOutlined} from '@ant-design/icons-vue';
 
 let allTags: string[] = []
 
@@ -25,6 +25,8 @@ const rowSelection: TableRowSelection<FileDetail> = reactive({
     disabled: record.status === 'error',
   }),
 })
+
+const [modal, contextHolder] = Modal.useModal();
 
 onMounted(() => {
   allTags = TagStore.getTags()
@@ -58,14 +60,21 @@ const columns: TableProps<FileDetail>['columns'] = [
 ]
 
 const buttonState = reactive({
-  commitLoading: false
+  commitLoading: false,
+  historyLoading: false,
 })
 
 const updateStatus = async (file: FileDetail) => {
   try {
     file.status = await getStatus(file.path)
-  } catch (e) {
+  } catch (e: any) {
     console.error(e)
+    notification.error({
+      message: `获取 ${file.name} 状态失败`,
+      description: e.message,
+      duration: 2,
+      placement: 'bottomRight'
+    })
     file.status = 'error'
   }
 };
@@ -137,6 +146,7 @@ const handleCommit = async () => {
   console.log('commit file:', filesToCommit)
   console.log('commit message:', message.value)
   console.log('update tag:', tag.value)
+  const successFiles: FileDetail[] = []
   for (let file of filesToCommit) {
     console.log('committing', file.path)
     try {
@@ -150,6 +160,7 @@ const handleCommit = async () => {
         duration: 2,
         placement: 'bottomRight'
       })
+      continue
     }
     try {
       antMessage.loading({content: `更新 ${file.name} TAG中...`, key: messageKey, duration: 0});
@@ -162,8 +173,23 @@ const handleCommit = async () => {
         duration: 2,
         placement: 'bottomRight'
       })
+      continue
     }
+    await updateStatus(file)
+    successFiles.push(file)
   }
+
+  let historyStr = ''
+  for (let file of successFiles) {
+    historyStr += await getHistory(file.path) + '\n'
+  }
+  modal.info({
+    title: '提交历史',
+    content: historyStr,
+    width: '100%',
+    okText: '好的',
+  });
+
   antMessage.success({content: '提交完成', key: messageKey, duration: 2});
   console.log('commit done')
 
@@ -173,6 +199,33 @@ const handleCommit = async () => {
 
   buttonState.commitLoading = false
 }
+
+const handleHistory = async () => {
+  const filesValue = files.value
+  const filesToCommit = filesValue.filter(f => f.selected)
+  if (!filesToCommit.length) {
+    antMessage.error('请选择文件')
+    return
+  }
+  buttonState.historyLoading = true
+  const messageKey = 'history';
+  antMessage.loading({content: '获取历史中...', key: messageKey, duration: 0});
+  console.log('get history file:', filesToCommit)
+  let historyStr = ''
+  for (let file of filesToCommit) {
+    historyStr += await getHistory(file.path) + '\n'
+  }
+  modal.info({
+    title: '提交历史',
+    content: historyStr,
+    width: '100%',
+    okText: '好的',
+  });
+  antMessage.success({content: '获取历史完成', key: messageKey, duration: 2});
+  console.log('get history done')
+  buttonState.historyLoading = false
+}
+
 </script>
 
 <template>
@@ -221,10 +274,15 @@ const handleCommit = async () => {
     </a-form-item>
     <a-form-item style="margin-left: 80px">
       <a-button :loading="buttonState.commitLoading"
-                type="primary" @click="handleCommit">提交
+                type="primary" @click="handleCommit">提交并TAG
+      </a-button>
+      <a-button :loading="buttonState.historyLoading"
+                style="margin-left: 8px"
+                type="default" @click="handleHistory">获取历史
       </a-button>
     </a-form-item>
   </a-form>
+  <contextHolder/>
 </template>
 
 <style scoped>

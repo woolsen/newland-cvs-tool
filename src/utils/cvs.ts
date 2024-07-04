@@ -42,6 +42,15 @@ export async function updateTag(filePath: string, tag: string) {
   return stdout.startsWith('T');
 }
 
+export async function getHistory(filePath: string): Promise<string> {
+  const fileName = filePath.split(/([\\/])/).pop();
+  if (!fileName) {
+    return '';
+  }
+  const dir = filePath.substring(0, filePath.lastIndexOf(fileName));
+  return await cmd(`cvs history -w -c -l ${fileName}`, dir);
+}
+
 /**
  * 获取最新的标签
  * @param stdout
