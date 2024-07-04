@@ -47,7 +47,7 @@ const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
 async function createWindow() {
   win = new BrowserWindow({
-    title: 'Main window',
+    title: 'CVS Tool',
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
     webPreferences: {
       preload,
@@ -56,8 +56,8 @@ async function createWindow() {
 
       // Consider using contextBridge.exposeInMainWorld
       // Read more on https://www.electronjs.org/docs/latest/tutorial/context-isolation
-      // contextIsolation: false,
     },
+    autoHideMenuBar: !VITE_DEV_SERVER_URL,
   })
 
   if (VITE_DEV_SERVER_URL) { // #298
@@ -122,13 +122,15 @@ ipcMain.handle('open-win', (_, arg) => {
   }
 })
 
-
-
 // 处理来自渲染进程的指令执行请求
-ipcMain.handle('cmd', async (event, command) => {
+ipcMain.handle('cmd', async (event, command: string, cwd: string) => {
   console.log('Execute command: ', command);
   return new Promise((resolve, reject) => {
-    cmd(command, (error, stdout, stderr) => {
+    let realCommand = command;
+    if (cwd) {
+      realCommand = `cd ${cwd} && ${command}`;
+    }
+    cmd(realCommand, (error, stdout, stderr) => {
       if (stdout) {
         console.log(stdout);
       }

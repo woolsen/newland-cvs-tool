@@ -1,13 +1,14 @@
-<script setup lang="ts">
-import {ref} from 'vue'
-import {TableProps} from "ant-design-vue";
+<script lang="ts" setup>
+import {reactive, ref} from 'vue'
+import {message as antMessage, notification, TableProps} from "ant-design-vue";
 import {Key} from "ant-design-vue/es/table/interface";
-// import {ipcRenderer} from "electron";
+import {commit, CVS_STATUS, getStatus, updateTag} from "./utils/cvs";
 
 class FileDetail {
   name: string
   path: string
   tag?: string
+  status?: CVS_STATUS | 'loading' | 'error'
 
   constructor(name: string, path: string) {
     this.name = name
@@ -16,6 +17,8 @@ class FileDetail {
 }
 
 const files = ref<FileDetail[]>([])
+const message = ref<string>('')
+const tag = ref<string>('')
 
 const columns: TableProps<FileDetail>['columns'] = [
   {
@@ -24,32 +27,43 @@ const columns: TableProps<FileDetail>['columns'] = [
     key: 'path',
   },
   {
-    title: 'TAG',
-    dataIndex: 'tag',
-    key: 'tag',
+    title: '状态',
+    dataIndex: 'status',
+    key: 'status',
+    width: 100
   },
   {
     title: '操作',
     dataIndex: 'action',
     key: 'action',
+    width: 60
   },
 ]
 
-window.ipcRenderer.invoke('cmd', 'dir')
+const buttonState = reactive({
+  commitLoading: false
+})
 
-const rowSelection: TableProps<FileDetail>['rowSelection'] = {};
+const fileTableState = reactive<{
+  selectedRowKeys: Key[];
+  loading: boolean;
+}>({
+  selectedRowKeys: [],
+  loading: false,
+});
 
-async function fetchTag(path: string): Promise<string> {
-  console.log(window.ipcRenderer)
-  const result = await window.ipcRenderer.invoke('cmd', 'ls')
-  console.log(result)
-  return 'some tag'
-}
+const onSelectChange = (selectedRowKeys: Key[]) => {
+  console.log('selectedRowKeys changed: ', selectedRowKeys);
+  fileTableState.selectedRowKeys = selectedRowKeys;
+};
 
-const updateTag = async (file: FileDetail) => {
-  console.log('fetch tag...');
-  file.tag = await fetchTag(file.path);
-  console.log('fetch tag done');
+const updateStatus = async (file: FileDetail) => {
+  try {
+    file.status = await getStatus(file.path)
+  } catch (e) {
+    console.error(e)
+    file.status = 'error'
+  }
 };
 
 const handleDrop = (e: DragEvent) => {
@@ -68,7 +82,8 @@ function addFile(file: File) {
   }
   const detail = new FileDetail(file.name, file.path);
   files.value.push(detail);
-  updateTag(detail).then(() => {
+  fileTableState.selectedRowKeys.push(detail.path);
+  updateStatus(detail).then(() => {
     files.value = [...files.value];
   });
 }
@@ -79,15 +94,67 @@ const handleDelete = (path: Key) => {
     files.value.splice(index, 1)
   }
 }
+
+const handleCommit = async () => {
+  if (!fileTableState.selectedRowKeys.length) {
+    antMessage.error('请选择文件')
+    return
+  }
+  if (!tag.value) {
+    antMessage.error('TAG不能为空')
+    return
+  }
+  buttonState.commitLoading = true
+  const filesToCommit = files.value.filter(f => fileTableState.selectedRowKeys.includes(f.path))
+  const messageKey = 'commit';
+  antMessage.loading({content: '提交中...', key: messageKey, duration: 0});
+  console.log('commit file:', filesToCommit)
+  console.log('commit message:', message.value)
+  console.log('update tag:', tag.value)
+  for (let file of filesToCommit) {
+    console.log('committing', file.path)
+    try {
+      antMessage.loading({content: `提交 ${file.name} 中...`, key: messageKey, duration: 0});
+      await commit(file.path, message.value)
+    } catch (e: any) {
+      console.error(e)
+      notification.error({
+        message: `提交 ${file.name} 失败`,
+        description: e.message,
+        duration: 2,
+        placement: 'bottomRight'
+      })
+    }
+    try {
+      antMessage.loading({content: `更新 ${file.name} TAG中...`, key: messageKey, duration: 0});
+      await updateTag(file.path, tag.value)
+    } catch (e: any) {
+      console.error(e)
+      notification.error({
+        message: `更新 ${file.name} TAG失败`,
+        description: e.message,
+        duration: 2,
+        placement: 'bottomRight'
+      })
+    }
+  }
+  antMessage.success({content: '提交完成', key: messageKey, duration: 2});
+  console.log('commit done')
+  buttonState.commitLoading = false
+}
 </script>
 
 <template>
-  <a-col @dragover.prevent="() => {}" @drop.prevent="handleDrop" style="width: 100%">
-    <a-table size="small" :pagination="false" :data-source="files" rowKey="path"
-             :row-selection="rowSelection" :columns="columns">
+  <div style="width: 100%" @dragover.prevent="() => {}" @drop.prevent="handleDrop">
+    <a-table :columns="columns" :data-source="files" :pagination="false"
+             :row-selection="{ selectedRowKeys: fileTableState.selectedRowKeys, onChange: onSelectChange}"
+             rowKey="path" size="small">
       <template #bodyCell="{ column, record }">
-        <template v-if="column.dataIndex === 'tag'">
-          <a-tag v-if="record.tag">{{ record.tag }}</a-tag>
+        <template v-if="column.dataIndex === 'status'">
+          <a-tag v-if="record.status"
+                 :color="record.status === 'error' ? 'red' : 'green'">
+            {{ record.status }}
+          </a-tag>
           <a-spin v-else/>
         </template>
         <template v-else-if="column.dataIndex === 'action'">
@@ -95,11 +162,33 @@ const handleDelete = (path: Key) => {
         </template>
       </template>
       <template #emptyText>
-        <a-empty description="拖拽即可选择文件"></a-empty>
+        <a-empty description="拖拽选择文件"></a-empty>
       </template>
     </a-table>
-  </a-col>
+  </div>
+  <a-form :label-col="{ style: { width: '80px' } }"
+          labelAlign="left" style="margin-top: 16px">
+    <a-form-item
+        label="Message"
+        name="Message">
+      <a-input v-model:value="message" placeholder="请输入提交信息（可选）"/>
+    </a-form-item>
+    <a-form-item
+        label="TAG*"
+        name="tag">
+      <a-input v-model:value="tag" placeholder="请输入TAG"/>
+    </a-form-item>
+    <a-form-item style="margin-left: 80px">
+      <a-button :loading="buttonState.commitLoading"
+                style="width: 100%; "
+                type="primary" @click="handleCommit">提交
+      </a-button>
+    </a-form-item>
+  </a-form>
 </template>
 
-<style>
+<style scoped>
+.ant-form-item {
+  margin-bottom: 8px;
+}
 </style>
