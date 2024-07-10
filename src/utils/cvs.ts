@@ -12,6 +12,16 @@ export enum STATUS {
   NOT_CVS_FILE = 'not-cvs-file'
 }
 
+export const STATUS_TEXT: { [key in STATUS]: string } = {
+  [STATUS.UNKNOWN]: '未知',
+  [STATUS.MODIFIED]: '已修改',
+  [STATUS.ADDED]: '已添加',
+  [STATUS.REMOVED]: '已删除',
+  [STATUS.CONFLICT]: '冲突',
+  [STATUS.UP_TO_DATE]: '最新',
+  [STATUS.NOT_CVS_FILE]: '非CVS文件'
+};
+
 async function getStatus(filePath: string): Promise<STATUS> {
   const fileName = filePath.split(/([\\/])/).pop();
   if (!fileName) {

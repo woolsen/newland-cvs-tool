@@ -2,7 +2,7 @@
 import {computed, ComputedRef, h, onMounted, reactive, ref} from 'vue'
 import {message as antMessage, Modal, notification, TableProps} from "ant-design-vue";
 import {Key, type TableRowSelection} from "ant-design-vue/es/table/interface";
-import {cvs} from "./utils/cvs";
+import {cvs, STATUS, STATUS_TEXT} from "./utils/cvs";
 import TagStore from "./store/tag";
 import {CompleteText, FileDetail} from "./utils/bean";
 import {CloseOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons-vue';
@@ -270,12 +270,13 @@ const handleAddFile = () => {
 
 <template>
   <div style="display: flex; flex-direction: row">
-    <a-col style="margin-right: 1rem">
+    <a-col>
       <div class="tag-history-title">提交历史</div>
       <div v-for="tag in tags" :key="tag" class="tag-history" @click="() => checkoutTag(tag)">
         {{ tag }}
       </div>
     </a-col>
+    <div class="divider"/>
     <a-col style="width: 100%">
       <a-row style="width: 100%; margin-bottom: 8px">
         <a-button :icon="h(PlusOutlined)" type="primary" @click="handleAddFile">添加文件</a-button>
@@ -293,7 +294,7 @@ const handleAddFile = () => {
               <a-spin v-if="record.status === 'loading'"/>
               <a-tag v-else
                      :color="record.status === 'error' || record.status == cvs.STATUS.NOT_CVS_FILE? 'red': 'green'">
-                {{ record.status }}
+                {{ STATUS_TEXT[record.status as STATUS] }}
               </a-tag>
             </template>
             <template v-else-if="column.dataIndex === 'action'">
@@ -345,16 +346,24 @@ const handleAddFile = () => {
   margin-bottom: 8px;
 }
 
-.tag-history-title {
-  font-size: 16px;
-  font-weight: bold;
-  margin-bottom: 8px;
+.divider {
+  width: 1px;
+  background: #f0f0f0;
+  margin-left: 1rem;
+  margin-right: 1rem;
 }
 
 .tag-history {
   font-size: 14px;
   padding: 4px 8px;
   border-radius: 4px;
+}
+
+.tag-history-title {
+  font-size: 16px;
+  font-weight: bold;
+  width: 200px;
+  margin-bottom: 8px;
 }
 
 .tag-history:hover {
