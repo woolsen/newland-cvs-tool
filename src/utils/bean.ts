@@ -1,10 +1,10 @@
-import {CVS_STATUS} from "./cvs";
+import {STATUS} from "./cvs";
 
 export class FileDetail {
   name: string
   path: string
   selected: boolean
-  status: CVS_STATUS | 'loading' | 'error'
+  status: STATUS | 'loading' | 'error'
 
   constructor(name: string, path: string) {
     this.name = name

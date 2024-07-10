@@ -1,40 +1,50 @@
 <script lang="ts" setup>
-import {onMounted, reactive, ref} from 'vue'
+import {computed, ComputedRef, h, onMounted, reactive, ref} from 'vue'
 import {message as antMessage, Modal, notification, TableProps} from "ant-design-vue";
 import {Key, type TableRowSelection} from "ant-design-vue/es/table/interface";
-import {commit, getHistory, getStatus, updateTag} from "./utils/cvs";
+import {cvs} from "./utils/cvs";
 import TagStore from "./store/tag";
 import {CompleteText, FileDetail} from "./utils/bean";
-import {CloseOutlined} from '@ant-design/icons-vue';
-
-let allTags: string[] = []
+import {CloseOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons-vue';
 
 const message = ref<string>('')
-const tags = ref<CompleteText[]>([])
-const tag = ref<string>('')
 const files = ref<FileDetail[]>([])
+const tag = ref<string>('')
+
+const tags = ref<string[]>([])
+const tagCompletes: ComputedRef<CompleteText[]> = computed(() => {
+  let tagCompletes = []
+  const tagValue = tag.value
+  for (let tag of tags.value) {
+    if (!tagValue || tag.includes(tagValue)) {
+      tagCompletes.push(new CompleteText(tag))
+    }
+  }
+  return tagCompletes
+});
+
 
 const rowSelection: TableRowSelection<FileDetail> = reactive({
   selectedRowKeys: [],
-  onChange: (selectedRowKeys: Key[], selectedRows: FileDetail[]) => {
+  onChange: (selectedRowKeys: Key[], _: FileDetail[]) => {
     console.log('selectedRowKeys changed: ', selectedRowKeys);
     files.value.forEach(f => f.selected = selectedRowKeys.includes(f.path))
     rowSelection.selectedRowKeys = selectedRowKeys
   },
   getCheckboxProps: (record: FileDetail) => ({
-    disabled: record.status === 'error',
+    disabled: record.status === 'error' || record.status === cvs.STATUS.NOT_CVS_FILE,
   }),
 })
 
 const [modal, contextHolder] = Modal.useModal();
 
 onMounted(() => {
-  allTags = TagStore.getTags()
-  if (!allTags.length) {
+  const tagsLocal = TagStore.getTags()
+  if (!tagsLocal.length) {
     return
   }
-  tags.value = allTags.map(t => new CompleteText(t))
-  tag.value = allTags.length ? allTags[0] : ''
+  tags.value = tagsLocal
+  tag.value = tagsLocal.length ? tagsLocal[0] : ''
   files.value = TagStore.getTagFiles(tag.value)
   rowSelection.selectedRowKeys = files.value.filter(f => f.selected).map(f => f.path)
 })
@@ -49,7 +59,7 @@ const columns: TableProps<FileDetail>['columns'] = [
     title: '状态',
     dataIndex: 'status',
     key: 'status',
-    width: 100
+    width: 120
   },
   {
     title: '操作',
@@ -66,7 +76,7 @@ const buttonState = reactive({
 
 const updateStatus = async (file: FileDetail) => {
   try {
-    file.status = await getStatus(file.path)
+    file.status = await cvs.getStatus(file.path)
   } catch (e: any) {
     console.error(e)
     notification.error({
@@ -79,11 +89,11 @@ const updateStatus = async (file: FileDetail) => {
   }
 };
 
-const onTagSearch = (value: string) => {
-  tags.value = allTags.filter(t => t.includes(value)).map(t => new CompleteText(t))
-}
-
 const onTagSelect = (value: string) => {
+  tag.value = value
+};
+
+const checkoutTag = (value: string) => {
   tag.value = value
   const filesValue = TagStore.getTagFiles(tag.value)
   if (filesValue.length) {
@@ -93,8 +103,7 @@ const onTagSelect = (value: string) => {
 
 const onTagDelete = (value: string) => {
   TagStore.removeTag(value)
-  allTags = TagStore.getTags()
-  tags.value = allTags.map(t => new CompleteText(t))
+  tags.value = TagStore.getTags()
 };
 
 const handleDrop = (e: DragEvent) => {
@@ -150,8 +159,14 @@ const handleCommit = async () => {
   for (let file of filesToCommit) {
     console.log('committing', file.path)
     try {
+      const status = await cvs.getStatus(file.path)
       antMessage.loading({content: `提交 ${file.name} 中...`, key: messageKey, duration: 0});
-      await commit(file.path, message.value)
+      if (status === cvs.STATUS.ADDED || status === cvs.STATUS.MODIFIED) {
+        await cvs.commit(file.path, message.value)
+      } else if (status === cvs.STATUS.UNKNOWN) {
+        await cvs.add(file.path)
+        await cvs.commit(file.path, message.value)
+      }
     } catch (e: any) {
       console.error(e)
       notification.error({
@@ -164,7 +179,7 @@ const handleCommit = async () => {
     }
     try {
       antMessage.loading({content: `更新 ${file.name} TAG中...`, key: messageKey, duration: 0});
-      await updateTag(file.path, tag.value)
+      await cvs.updateTag(file.path, tag.value)
     } catch (e: any) {
       console.error(e)
       notification.error({
@@ -181,7 +196,7 @@ const handleCommit = async () => {
 
   let historyStr = ''
   for (let file of successFiles) {
-    historyStr += await getHistory(file.path) + '\n'
+    historyStr += await cvs.getHistory(file.path) + '\n'
   }
   modal.info({
     title: '提交历史',
@@ -194,9 +209,7 @@ const handleCommit = async () => {
   console.log('commit done')
 
   let tagsValue = TagStore.addTag(tag.value)
-  tags.value = tagsValue.map(t => new CompleteText(t))
   TagStore.setTagFiles(tag.value, filesValue)
-
   buttonState.commitLoading = false
 }
 
@@ -213,7 +226,7 @@ const handleHistory = async () => {
   console.log('get history file:', filesToCommit)
   let historyStr = ''
   for (let file of filesToCommit) {
-    historyStr += await getHistory(file.path) + '\n'
+    historyStr += await cvs.getHistory(file.path) + '\n'
   }
   modal.info({
     title: '提交历史',
@@ -226,67 +239,127 @@ const handleHistory = async () => {
   buttonState.historyLoading = false
 }
 
+const reloadFileList = async () => {
+  files.value = files.value.map(f => {
+    f.status = 'loading'
+    return f
+  })
+  antMessage.loading({content: '文件状态刷新中...', key: 'reload', duration: 0});
+  for (let file of files.value) {
+    await updateStatus(file)
+  }
+  antMessage.success({content: '文件状态刷新完成', key: 'reload', duration: 2});
+}
+
+const handleAddFile = () => {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.multiple = true
+  input.onchange = (e: Event) => {
+    const target = e.target as HTMLInputElement
+    if (target.files) {
+      for (let i = 0; i < target.files.length; i++) {
+        addFile(target.files[i])
+      }
+    }
+  }
+  input.click()
+}
+
 </script>
 
 <template>
-  <div style="width: 100%" @dragover.prevent="() => {}" @drop.prevent="handleDrop">
-    <a-table :columns="columns" :data-source="files" :pagination="false"
-             :row-selection="rowSelection"
-             rowKey="path" size="small">
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.dataIndex === 'status'">
-          <a-spin v-if="record.status === 'loading'"/>
-          <a-tag v-else-if="record.status === 'error'" color="red">
-            {{ record.status }}
-          </a-tag>
-          <a-tag v-else color="green">
-            {{ record.status }}
-          </a-tag>
-        </template>
-        <template v-else-if="column.dataIndex === 'action'">
-          <a @click="() => handleDelete(record.path)">删除</a>
-        </template>
-      </template>
-      <template #emptyText>
-        <a-empty description="拖拽选择文件"></a-empty>
-      </template>
-    </a-table>
+  <div style="display: flex; flex-direction: row">
+    <a-col style="margin-right: 1rem">
+      <div class="tag-history-title">提交历史</div>
+      <div v-for="tag in tags" :key="tag" class="tag-history" @click="() => checkoutTag(tag)">
+        {{ tag }}
+      </div>
+    </a-col>
+    <a-col style="width: 100%">
+      <a-row style="width: 100%; margin-bottom: 8px">
+        <a-button :icon="h(PlusOutlined)" type="primary" @click="handleAddFile">添加文件</a-button>
+        <reload-outlined style="font-size: 18px; float: right; margin: 8px" @click="() => reloadFileList()"/>
+      </a-row>
+      <div style="width: 100%" @dragover.prevent="() => {}" @drop.prevent="handleDrop">
+        <a-table :columns="columns" :data-source="files" :pagination="false"
+                 :row-selection="rowSelection"
+                 rowKey="path" size="small">
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.dataIndex === 'path'">
+              <div style="word-break: break-all;">{{ record.path }}</div>
+            </template>
+            <template v-if="column.dataIndex === 'status'">
+              <a-spin v-if="record.status === 'loading'"/>
+              <a-tag v-else
+                     :color="record.status === 'error' || record.status == cvs.STATUS.NOT_CVS_FILE? 'red': 'green'">
+                {{ record.status }}
+              </a-tag>
+            </template>
+            <template v-else-if="column.dataIndex === 'action'">
+              <a @click="() => handleDelete(record.path)">删除</a>
+            </template>
+          </template>
+          <template #emptyText>
+            <a-empty description="拖拽选择文件"></a-empty>
+          </template>
+        </a-table>
+      </div>
+      <a-form :label-col="{ style: { width: '80px' } }"
+              labelAlign="left" style="margin-top: 16px">
+        <a-form-item
+            label="Message"
+            name="Message">
+          <a-input v-model:value="message" placeholder="请输入提交信息（可选）"/>
+        </a-form-item>
+        <a-form-item
+            label="TAG*"
+            name="tag">
+          <a-auto-complete v-model:value="tag" :options="tagCompletes" allow-clear placeholder="请输入TAG"
+                           @select="onTagSelect">
+            <template #option="item">
+              <div style="display: flex; justify-content: space-between; align-items: center">
+                <span>{{ item.value }}</span>
+                <close-outlined @click.prevent="() => onTagDelete(item.value)"/>
+              </div>
+            </template>
+          </a-auto-complete>
+        </a-form-item>
+        <a-form-item style="margin-left: 80px">
+          <a-button :loading="buttonState.commitLoading"
+                    type="primary" @click="handleCommit">提交&TAG
+          </a-button>
+          <a-button :loading="buttonState.historyLoading"
+                    style="margin-left: 8px"
+                    type="default" @click="handleHistory">获取历史
+          </a-button>
+        </a-form-item>
+      </a-form>
+    </a-col>
   </div>
-  <a-form :label-col="{ style: { width: '80px' } }"
-          labelAlign="left" style="margin-top: 16px">
-    <a-form-item
-        label="Message"
-        name="Message">
-      <a-input v-model:value="message" placeholder="请输入提交信息（可选）"/>
-    </a-form-item>
-    <a-form-item
-        label="TAG*"
-        name="tag">
-      <a-auto-complete v-model:value="tag" :options="tags" allow-clear placeholder="请输入TAG"
-                       @search="onTagSearch" @select="onTagSelect">
-        <template #option="item">
-          <div style="display: flex; justify-content: space-between; align-items: center">
-            <span>{{ item.value }}</span>
-            <close-outlined @click.prevent="() => onTagDelete(item.value)"/>
-          </div>
-        </template>
-      </a-auto-complete>
-    </a-form-item>
-    <a-form-item style="margin-left: 80px">
-      <a-button :loading="buttonState.commitLoading"
-                type="primary" @click="handleCommit">提交并TAG
-      </a-button>
-      <a-button :loading="buttonState.historyLoading"
-                style="margin-left: 8px"
-                type="default" @click="handleHistory">获取历史
-      </a-button>
-    </a-form-item>
-  </a-form>
   <contextHolder/>
 </template>
 
 <style scoped>
 .ant-form-item {
   margin-bottom: 8px;
+}
+
+.tag-history-title {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.tag-history {
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.tag-history:hover {
+  cursor: pointer;
+  color: #1890ff;
+  background: #f0f0f0;
 }
 </style>

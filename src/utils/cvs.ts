@@ -2,27 +2,45 @@
 
 import {cmd} from "../demos/ipc";
 
-export enum CVS_STATUS {
-  UNKNOWN = 'Unknown',
-  MODIFIED = 'Modified',
-  ADDED = 'Added',
-  REMOVED = 'Removed',
-  CONFLICT = 'Conflict',
-  UP_TO_DATE = 'Up-to-date'
+export enum STATUS {
+  UNKNOWN = 'unknown',
+  MODIFIED = 'modified',
+  ADDED = 'added',
+  REMOVED = 'removed',
+  CONFLICT = 'conflict',
+  UP_TO_DATE = 'up-to-date',
+  NOT_CVS_FILE = 'not-cvs-file'
 }
 
-export async function getStatus(filePath: string): Promise<CVS_STATUS> {
+async function getStatus(filePath: string): Promise<STATUS> {
   const fileName = filePath.split(/([\\/])/).pop();
   if (!fileName) {
-    return CVS_STATUS.UNKNOWN;
+    return STATUS.UNKNOWN;
   }
   const dir = filePath.substring(0, filePath.lastIndexOf(fileName));
   // await cmd('cvs status ' + fileName, dir)
-  const stdout = await cmd(`cvs status -v ${fileName}`, dir);
-  return parseStatus(stdout);
+  try {
+    const stdout = await cmd(`cvs status -v ${fileName}`, dir);
+    return parseStatus(stdout);
+  } catch (e: any) {
+    if (e.message.includes('No CVSROOT specified')) {
+      return STATUS.NOT_CVS_FILE;
+    }
+    return STATUS.UNKNOWN;
+  }
 }
 
-export async function commit(filePath: string, message: string) {
+async function add(filePath: string) {
+  const fileName = filePath.split(/([\\/])/).pop();
+  if (!fileName) {
+    return false;
+  }
+  const dir = filePath.substring(0, filePath.lastIndexOf(fileName));
+  const stdout = await cmd(`cvs add ${fileName}`, dir);
+  return stdout.startsWith('scheduling file');
+}
+
+async function commit(filePath: string, message: string) {
   const fileName = filePath.split(/([\\/])/).pop();
   if (!fileName) {
     return false;
@@ -32,7 +50,7 @@ export async function commit(filePath: string, message: string) {
   return stdout.startsWith('Checking in');
 }
 
-export async function updateTag(filePath: string, tag: string) {
+async function updateTag(filePath: string, tag: string) {
   const fileName = filePath.split(/([\\/])/).pop();
   if (!fileName) {
     return false;
@@ -42,7 +60,7 @@ export async function updateTag(filePath: string, tag: string) {
   return stdout.startsWith('T');
 }
 
-export async function getHistory(filePath: string): Promise<string> {
+async function getHistory(filePath: string): Promise<string> {
   const fileName = filePath.split(/([\\/])/).pop();
   if (!fileName) {
     return '';
@@ -55,21 +73,21 @@ export async function getHistory(filePath: string): Promise<string> {
  * 获取最新的标签
  * @param stdout
  */
-function parseStatus(stdout: string): CVS_STATUS {
+function parseStatus(stdout: string): STATUS {
   if (stdout.includes('File:')) {
     if (stdout.includes('Status: Up-to-date')) {
-      return CVS_STATUS.UP_TO_DATE;
+      return STATUS.UP_TO_DATE;
     } else if (stdout.includes('Status: Locally Modified')) {
-      return CVS_STATUS.MODIFIED;
-    } else if (stdout.includes('Status: Added')) {
-      return CVS_STATUS.ADDED;
+      return STATUS.MODIFIED;
+    } else if (stdout.includes('Status: Locally Added')) {
+      return STATUS.ADDED;
     } else if (stdout.includes('Status: Removed')) {
-      return CVS_STATUS.REMOVED;
+      return STATUS.REMOVED;
     } else if (stdout.includes('Status: Conflict')) {
-      return CVS_STATUS.CONFLICT;
+      return STATUS.CONFLICT;
     }
   }
-  return CVS_STATUS.UNKNOWN;
+  return STATUS.UNKNOWN;
 }
 
 /**
@@ -102,3 +120,13 @@ function parseLatestTag(cvsOutput: string): string[] {
 
   return latestTags.map(tag => tag.tag);
 }
+
+
+export const cvs = {
+  STATUS,
+  getStatus,
+  add,
+  commit,
+  updateTag,
+  getHistory,
+};
