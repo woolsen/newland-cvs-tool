@@ -49,6 +49,8 @@ async function createWindow() {
   win = new BrowserWindow({
     title: 'CVS Tool',
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
+    width: 1024,  // 窗口宽度
+    height: 768,  // 窗口高度
     webPreferences: {
       preload,
       // Warning: Enable nodeIntegration and disable contextIsolation is not secure in production
