@@ -23,6 +23,13 @@
   },
   "win": {
     "icon": "public/newland-256.png",
+    "extraFiles": [
+      {
+        "from": "cvsnt/",
+        "to": "cvsnt/",
+        "filter": ["**/*"]
+      }
+    ],
     "target": [
       {
         "target": "nsis",

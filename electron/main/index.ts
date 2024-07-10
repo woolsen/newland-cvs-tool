@@ -21,6 +21,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // │ └── index.html    > Electron-Renderer
 //
 process.env.APP_ROOT = path.join(__dirname, '../..')
+process.env.PATH = `${process.env.PATH};${path.dirname('cvsnt/')}`;
 
 export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
