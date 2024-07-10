@@ -81,6 +81,8 @@ async function createWindow() {
   // win.webContents.on('will-navigate', (event, url) => { }) #344
 }
 
+app.commandLine.appendSwitch('lang', 'zh-CN');
+
 app.whenReady().then(createWindow)
 
 app.on('window-all-closed', () => {

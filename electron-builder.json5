@@ -2,8 +2,12 @@
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   "appId": "com.woolsen.newland.cvstool",
-  "asar": true,
   "productName": "CVS工具",
+  "asar": true,
+  compression: "maximum",
+  electronLanguages: [
+    "zh-CN"
+  ],
   "directories": {
     "output": "release/${version}"
   },
@@ -21,6 +25,12 @@
     "target": [
       {
         "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      },
+      {
+        "target": "7z",
         "arch": [
           "x64"
         ]
