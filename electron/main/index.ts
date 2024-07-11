@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 import iconv from 'iconv-lite'
+import fs from "node:fs";
 
 
 const require = createRequire(import.meta.url)
@@ -130,6 +131,10 @@ ipcMain.handle('open-win', (_, arg) => {
 ipcMain.handle('open-file', async (event, path: string) => {
   await shell.openPath(path)
 });
+
+ipcMain.handle('check-file-exists', async (event, path: string) => {
+  return fs.existsSync(path);
+})
 
 // 处理来自渲染进程的指令执行请求
 ipcMain.handle('cmd', async (event, command: string, cwd: string) => {

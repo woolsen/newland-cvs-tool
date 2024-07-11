@@ -2,11 +2,12 @@
 import {computed, ComputedRef, h, onMounted, reactive, ref} from 'vue'
 import {message as antMessage, Modal, notification, TableProps} from "ant-design-vue";
 import {Key, type TableRowSelection} from "ant-design-vue/es/table/interface";
-import {cvs, STATUS, STATUS_TEXT} from "./utils/cvs";
+import {cvs, STATUS} from "./utils/cvs";
 import TagStore from "./store/tag";
-import {CompleteText, FileDetail} from "./utils/bean";
+import {CompleteText, FileDetail, STATUS_INFO} from "./utils/bean";
 import {CloseOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons-vue';
-import {openFile} from "./demos/ipc";
+import {checkFileExists, openFile} from "./demos/ipc";
+
 
 const message = ref<string>('')
 const files = ref<FileDetail[]>([])
@@ -33,7 +34,7 @@ const rowSelection: TableRowSelection<FileDetail> = reactive({
     rowSelection.selectedRowKeys = selectedRowKeys
   },
   getCheckboxProps: (record: FileDetail) => ({
-    disabled: record.status === 'error' || record.status === cvs.STATUS.NOT_CVS_FILE,
+    disabled: !STATUS_INFO[record.status as STATUS].selectable,
   }),
 })
 
@@ -60,7 +61,7 @@ const columns: TableProps<FileDetail>['columns'] = [
     title: '状态',
     dataIndex: 'status',
     key: 'status',
-    width: 120
+    width: 80
   },
   {
     title: '操作',
@@ -76,8 +77,15 @@ const buttonState = reactive({
 })
 
 const updateStatus = async (file: FileDetail) => {
+  //检查文件是否存在
+  if (!await checkFileExists(file.path)) {
+    file.status = 'not-found'
+    file.selected = false
+    return
+  }
   try {
     file.status = await cvs.getStatus(file.path)
+    file.selected = STATUS_INFO[file.status as STATUS].selectable ? file.selected : false
   } catch (e: any) {
     console.error(e)
     notification.error({
@@ -87,6 +95,7 @@ const updateStatus = async (file: FileDetail) => {
       placement: 'bottomRight'
     })
     file.status = 'error'
+    file.selected = false
   }
 };
 
@@ -254,7 +263,9 @@ const reloadFileList = async () => {
   for (let file of files.value) {
     await updateStatus(file)
   }
+  files.value = [...files.value]
   antMessage.success({content: '文件状态刷新完成', key: 'reload', duration: 2});
+  TagStore.setTagFiles(tag.value, files.value)
 }
 
 const handleAddFile = () => {
@@ -305,15 +316,16 @@ const handleAddFile = () => {
             </template>
             <template v-if="column.dataIndex === 'status'">
               <a-spin v-if="record.status === 'loading'"/>
-              <a-tag v-else
-                     :color="record.status === 'error' || record.status == cvs.STATUS.NOT_CVS_FILE? 'red': 'green'">
-                {{ STATUS_TEXT[record.status as STATUS] }}
+              <a-tag v-else :color="STATUS_INFO[record.status as STATUS].color">
+                {{ STATUS_INFO[record.status as STATUS].text }}
               </a-tag>
             </template>
             <template v-else-if="column.dataIndex === 'action'">
               <span>
-                <a @click="() => handleOpenFile(record.path)">打开</a>
-                <a-divider type="vertical" />
+                <template v-if="record.status !== 'not-found'">
+                  <a @click="() => handleOpenFile(record.path)">打开</a>
+                  <a-divider type="vertical"/>
+                </template>
                 <a @click="() => handleDelete(record.path)">删除</a>
               </span>
             </template>

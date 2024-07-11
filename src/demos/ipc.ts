@@ -21,3 +21,11 @@ export async function cmd(command: string, cwd: string | null = null): Promise<s
 export async function openFile(path: string) {
   await window.ipcRenderer.invoke('open-file', path)
 }
+
+/**
+ * Check file exists
+ * @param path
+ */
+export async function checkFileExists(path: string): Promise<boolean> {
+  return window.ipcRenderer.invoke('check-file-exists', path)
+}
