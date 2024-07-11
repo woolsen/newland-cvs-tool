@@ -213,7 +213,7 @@ const handleCommit = async () => {
     historyStr += await cvs.getHistory(file.path) + '\n'
   }
   modal.info({
-    title: '提交历史',
+    title: '提交清单',
     content: historyStr,
     width: '100%',
     okText: '好的',
@@ -237,19 +237,19 @@ const handleHistory = async () => {
   }
   buttonState.historyLoading = true
   const messageKey = 'history';
-  antMessage.loading({content: '获取历史中...', key: messageKey, duration: 0});
+  antMessage.loading({content: '获取清单中...', key: messageKey, duration: 0});
   console.log('get history file:', filesToCommit)
   let historyStr = ''
   for (let file of filesToCommit) {
     historyStr += await cvs.getHistory(file.path) + '\n'
   }
   modal.info({
-    title: '提交历史',
+    title: '提交清单',
     content: historyStr,
     width: '100%',
     okText: '好的',
   });
-  antMessage.success({content: '获取历史完成', key: messageKey, duration: 2});
+  antMessage.success({content: '获取清单完成', key: messageKey, duration: 2});
   console.log('get history done')
   buttonState.historyLoading = false
 }
@@ -343,7 +343,7 @@ const handleAddFile = () => {
           <a-input v-model:value="message" placeholder="请输入提交信息（可选）"/>
         </a-form-item>
         <a-form-item
-            label="TAG*"
+            label="标签(TAG)*"
             name="tag">
           <a-auto-complete v-model:value="tag" :options="tagCompletes" allow-clear placeholder="请输入TAG"
                            @select="onTagSelect">
@@ -361,7 +361,7 @@ const handleAddFile = () => {
           </a-button>
           <a-button :loading="buttonState.historyLoading"
                     style="margin-left: 8px"
-                    type="default" @click="handleHistory">获取历史
+                    type="default" @click="handleHistory">获取清单
           </a-button>
         </a-form-item>
       </a-form>
