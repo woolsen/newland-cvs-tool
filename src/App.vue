@@ -280,12 +280,19 @@ const handleAddFile = () => {
     <a-col style="width: 100%">
       <a-row style="width: 100%; margin-bottom: 8px">
         <a-button :icon="h(PlusOutlined)" type="primary" @click="handleAddFile">添加文件</a-button>
-        <reload-outlined style="font-size: 18px; float: right; margin: 8px" @click="() => reloadFileList()"/>
       </a-row>
       <div style="width: 100%" @dragover.prevent="() => {}" @drop.prevent="handleDrop">
         <a-table :columns="columns" :data-source="files" :pagination="false"
                  :row-selection="rowSelection"
                  rowKey="path" size="small">
+          <template #headerCell="{ column }">
+            <template v-if="column.key === 'status'">
+            <span>
+              {{ column.title }}
+              <reload-outlined @click="() => reloadFileList()"/>
+            </span>
+            </template>
+          </template>
           <template #bodyCell="{ column, record }">
             <template v-if="column.dataIndex === 'path'">
               <div style="word-break: break-all;">{{ record.path }}</div>
