@@ -1,6 +1,6 @@
 //CVS Util
 
-import {cmd} from "../demos/ipc";
+import {cmd} from "./cmd";
 
 export enum STATUS {
   UNKNOWN = 'unknown',
@@ -9,24 +9,26 @@ export enum STATUS {
   REMOVED = 'removed',
   CONFLICT = 'conflict',
   UP_TO_DATE = 'up-to-date',
-  NOT_CVS_FILE = 'not-cvs-file'
+}
+
+export class InvalidCVSRootError extends Error {
+  constructor() {
+    super('Invalid CVSROOT');
+  }
 }
 
 async function getStatus(filePath: string): Promise<STATUS> {
-  const fileName = filePath.split(/([\\/])/).pop();
-  if (!fileName) {
-    return STATUS.UNKNOWN;
-  }
+  const fileName = filePath.split(/([\\/])/).pop()!;
   const dir = filePath.substring(0, filePath.lastIndexOf(fileName));
-  // await cmd('cvs status ' + fileName, dir)
   try {
     const stdout = await cmd(`cvs status -v ${fileName}`, dir);
+    console.log(stdout)
     return parseStatus(stdout);
   } catch (e: any) {
     if (e.message.includes('No CVSROOT specified')) {
-      return STATUS.NOT_CVS_FILE;
+      throw new InvalidCVSRootError();
     }
-    return STATUS.UNKNOWN;
+    throw e
   }
 }
 
@@ -38,6 +40,16 @@ async function add(filePath: string) {
   const dir = filePath.substring(0, filePath.lastIndexOf(fileName));
   const stdout = await cmd(`cvs add ${fileName}`, dir);
   return stdout.startsWith('scheduling file');
+}
+
+async function update(filePath: string) {
+  const fileName = filePath.split(/([\\/])/).pop();
+  if (!fileName) {
+    return false;
+  }
+  const dir = filePath.substring(0, filePath.lastIndexOf(fileName));
+  const stdout = await cmd(`cvs update ${fileName}`, dir);
+  return stdout.startsWith('U');
 }
 
 async function commit(filePath: string, message: string) {
@@ -83,7 +95,7 @@ function parseStatus(stdout: string): STATUS {
       return STATUS.ADDED;
     } else if (stdout.includes('Status: Removed')) {
       return STATUS.REMOVED;
-    } else if (stdout.includes('Status: Conflict')) {
+    } else if (stdout.includes('Status: Unresolved Conflict')) {
       return STATUS.CONFLICT;
     }
   }
@@ -127,6 +139,7 @@ export const cvs = {
   getStatus,
   add,
   commit,
+  update,
   updateTag,
   getHistory,
 };

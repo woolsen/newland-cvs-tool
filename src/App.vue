@@ -2,12 +2,25 @@
 import {computed, ComputedRef, h, onMounted, reactive, ref} from 'vue'
 import {message as antMessage, Modal, notification, TableProps} from "ant-design-vue";
 import {Key, type TableRowSelection} from "ant-design-vue/es/table/interface";
-import {cvs, STATUS} from "./utils/cvs";
+import {cvs, InvalidCVSRootError, STATUS} from "./utils/cvs";
 import TagStore from "./store/tag";
-import {CompleteText, FileDetail, STATUS_INFO} from "./utils/bean";
+import {CompleteText, FileDetail, FileStatus, StatusInfo} from "./utils/bean";
 import {CloseOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons-vue';
-import {checkFileExists, openFile} from "./demos/ipc";
+import {checkFileExists, deleteFile, openFile, renameFile} from "./utils/file";
 
+
+const STATUS_INFO: { [key in FileStatus]: StatusInfo } = {
+  [STATUS.UNKNOWN]: {text: '待提交', color: 'green', selectable: true},
+  [STATUS.MODIFIED]: {text: '已修改', color: 'green', selectable: true},
+  [STATUS.ADDED]: {text: '已添加', color: 'green', selectable: true},
+  [STATUS.REMOVED]: {text: '已删除', color: 'green', selectable: true},
+  [STATUS.CONFLICT]: {text: '冲突', color: 'green', selectable: true},
+  [STATUS.UP_TO_DATE]: {text: '最新', color: 'blue', selectable: true},
+  "not-cvs-file": {text: '非CVS文件', color: 'red', selectable: false},
+  "not-found": {text: '文件不存在', color: 'red', selectable: false},
+  "loading": {text: '加载中', color: 'pink', selectable: false},
+  "error": {text: '错误', color: 'red', selectable: false},
+};
 
 const message = ref<string>('')
 const files = ref<FileDetail[]>([])
@@ -81,22 +94,33 @@ const updateStatus = async (file: FileDetail) => {
   if (!await checkFileExists(file.path)) {
     file.status = 'not-found'
     file.selected = false
-    return
+    return file
   }
   try {
     file.status = await cvs.getStatus(file.path)
     file.selected = STATUS_INFO[file.status as STATUS].selectable ? file.selected : false
   } catch (e: any) {
     console.error(e)
-    notification.error({
-      message: `获取 ${file.name} 状态失败`,
-      description: e.message,
-      duration: 2,
-      placement: 'bottomRight'
-    })
-    file.status = 'error'
+    if (e instanceof InvalidCVSRootError) {
+      notification.error({
+        message: `无效的CVS根目录`,
+        description: e.message,
+        duration: 2,
+        placement: 'bottomRight'
+      })
+      file.status = 'not-cvs-file'
+    } else {
+      notification.error({
+        message: `获取 ${file.name} 状态失败`,
+        description: e.message,
+        duration: 2,
+        placement: 'bottomRight'
+      })
+      file.status = 'error'
+    }
     file.selected = false
   }
+  return file
 };
 
 const onTagSelect = (value: string) => {
@@ -169,16 +193,21 @@ const handleCommit = async () => {
   console.log('commit file:', filesToCommit)
   console.log('commit message:', message.value)
   console.log('update tag:', tag.value)
-  const successFiles: FileDetail[] = []
   for (let file of filesToCommit) {
     console.log('committing', file.path)
     try {
       const status = await cvs.getStatus(file.path)
       antMessage.loading({content: `提交 ${file.name} 中...`, key: messageKey, duration: 0});
-      if (status === cvs.STATUS.ADDED || status === cvs.STATUS.MODIFIED) {
+      if (status === cvs.STATUS.ADDED || status === cvs.STATUS.MODIFIED || status === cvs.STATUS.REMOVED) {
         await cvs.commit(file.path, message.value)
       } else if (status === cvs.STATUS.UNKNOWN) {
         await cvs.add(file.path)
+        await cvs.commit(file.path, message.value)
+      } else if (status === cvs.STATUS.CONFLICT) {
+        await renameFile(file.path, file.path + '.bak')
+        await cvs.update(file.path)
+        await deleteFile(file.path)
+        await renameFile(file.path + '.bak', file.path)
         await cvs.commit(file.path, message.value)
       }
     } catch (e: any) {
@@ -205,18 +234,20 @@ const handleCommit = async () => {
       continue
     }
     await updateStatus(file)
-    successFiles.push(file)
   }
 
   await showHistoryDialog(filesToCommit)
 
-  antMessage.success({content: '提交完成', key: messageKey, duration: 2});
   console.log('commit done')
+
+  antMessage.loading({content: '获取清单中...', key: messageKey, duration: 0});
 
   let tagsValue = TagStore.addTag(tag.value)
   TagStore.setTagFiles(tag.value, filesValue)
   tags.value = tagsValue
   buttonState.commitLoading = false
+
+  antMessage.success({content: '提交完成', key: messageKey, duration: 2});
 }
 
 const handleHistory = async () => {

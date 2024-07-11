@@ -136,6 +136,32 @@ ipcMain.handle('check-file-exists', async (event, path: string) => {
   return fs.existsSync(path);
 })
 
+// 重命名文件
+ipcMain.handle('rename-file', async (event, oldPath: string, newPath: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    fs.rename(oldPath, newPath, (err) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve();
+      }
+    });
+  });
+});
+
+// 删除文件
+ipcMain.handle('delete-file', async (event, path: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    fs.unlink(path, (err) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve();
+      }
+    });
+  });
+});
+
 // 处理来自渲染进程的指令执行请求
 ipcMain.handle('cmd', async (event, command: string, cwd: string) => {
   console.log('Execute command: ', command);
@@ -161,7 +187,7 @@ ipcMain.handle('cmd', async (event, command: string, cwd: string) => {
 });
 
 function cmd(command: string, callback: (error: Error | null, stdout: string, stderr: string) => void) {
-  exec(command, { encoding: 'buffer' }, (error, stdout, stderr) => {
+  exec(command, {encoding: 'buffer'}, (error, stdout, stderr) => {
     const stdoutGbk = iconv.decode(stdout, 'gbk');
     const stderrGbk = iconv.decode(stderr, 'gbk');
     callback(error, stdoutGbk, stderrGbk);
