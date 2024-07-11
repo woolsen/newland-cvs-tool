@@ -208,16 +208,7 @@ const handleCommit = async () => {
     successFiles.push(file)
   }
 
-  let historyStr = ''
-  for (let file of successFiles) {
-    historyStr += await cvs.getHistory(file.path) + '\n'
-  }
-  modal.info({
-    title: '提交清单',
-    content: historyStr,
-    width: '100%',
-    okText: '好的',
-  });
+  await showHistoryDialog(filesToCommit)
 
   antMessage.success({content: '提交完成', key: messageKey, duration: 2});
   console.log('commit done')
@@ -239,19 +230,23 @@ const handleHistory = async () => {
   const messageKey = 'history';
   antMessage.loading({content: '获取清单中...', key: messageKey, duration: 0});
   console.log('get history file:', filesToCommit)
+  await showHistoryDialog(filesToCommit)
+  antMessage.success({content: '获取清单完成', key: messageKey, duration: 2});
+  console.log('get history done')
+  buttonState.historyLoading = false
+}
+
+const showHistoryDialog = async (files: FileDetail[]) => {
   let historyStr = ''
-  for (let file of filesToCommit) {
+  for (let file of files) {
     historyStr += await cvs.getHistory(file.path) + '\n'
   }
   modal.info({
     title: '提交清单',
     content: historyStr,
-    width: '100%',
+    width: '90%',
     okText: '好的',
   });
-  antMessage.success({content: '获取清单完成', key: messageKey, duration: 2});
-  console.log('get history done')
-  buttonState.historyLoading = false
 }
 
 const reloadFileList = async () => {
