@@ -6,6 +6,7 @@ import {cvs, STATUS, STATUS_TEXT} from "./utils/cvs";
 import TagStore from "./store/tag";
 import {CompleteText, FileDetail} from "./utils/bean";
 import {CloseOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons-vue';
+import {openFile} from "./demos/ipc";
 
 const message = ref<string>('')
 const files = ref<FileDetail[]>([])
@@ -65,7 +66,7 @@ const columns: TableProps<FileDetail>['columns'] = [
     title: '操作',
     dataIndex: 'action',
     key: 'action',
-    width: 60
+    width: 100
   },
 ]
 
@@ -132,6 +133,10 @@ const handleDelete = (path: Key) => {
   if (index >= 0) {
     files.value.splice(index, 1)
   }
+}
+
+const handleOpenFile = (path: string) => {
+  openFile(path as string)
 }
 
 const handleCommit = async () => {
@@ -306,7 +311,11 @@ const handleAddFile = () => {
               </a-tag>
             </template>
             <template v-else-if="column.dataIndex === 'action'">
-              <a @click="() => handleDelete(record.path)">删除</a>
+              <span>
+                <a @click="() => handleOpenFile(record.path)">打开</a>
+                <a-divider type="vertical" />
+                <a @click="() => handleDelete(record.path)">删除</a>
+              </span>
             </template>
           </template>
           <template #emptyText>

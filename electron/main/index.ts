@@ -127,6 +127,10 @@ ipcMain.handle('open-win', (_, arg) => {
   }
 })
 
+ipcMain.handle('open-file', async (event, path: string) => {
+  await shell.openPath(path)
+});
+
 // 处理来自渲染进程的指令执行请求
 ipcMain.handle('cmd', async (event, command: string, cwd: string) => {
   console.log('Execute command: ', command);

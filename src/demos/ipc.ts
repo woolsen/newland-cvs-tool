@@ -13,3 +13,11 @@ export async function cmd(command: string, cwd: string | null = null): Promise<s
     window.ipcRenderer.invoke('cmd', command, cwd).then(resolve).catch(reject)
   })
 }
+
+/**
+ * Open file in explorer
+ * @param path
+ */
+export async function openFile(path: string) {
+  await window.ipcRenderer.invoke('open-file', path)
+}
