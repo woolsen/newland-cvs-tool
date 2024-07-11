@@ -13,7 +13,7 @@ export enum STATUS {
 }
 
 export const STATUS_TEXT: { [key in STATUS]: string } = {
-  [STATUS.UNKNOWN]: '未知',
+  [STATUS.UNKNOWN]: '待提交',
   [STATUS.MODIFIED]: '已修改',
   [STATUS.ADDED]: '已添加',
   [STATUS.REMOVED]: '已删除',
