@@ -210,6 +210,7 @@ const handleCommit = async () => {
 
   let tagsValue = TagStore.addTag(tag.value)
   TagStore.setTagFiles(tag.value, filesValue)
+  tags.value = tagsValue
   buttonState.commitLoading = false
 }
 
