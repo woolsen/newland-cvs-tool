@@ -14,7 +14,7 @@ const emit = defineEmits<{
 const hover = ref(false);
 
 const handleDelete = () => {
-  console.log(`delete tag ${tag}`)
+  console.log(`delete tag ${props.tag}`)
   emit('delete');
 };
 
