@@ -23,6 +23,8 @@ const STATUS_INFO: { [key in FileStatus]: StatusInfo } = {
   "error": {text: '错误', color: 'red', selectable: false},
 };
 
+const MESSAGE_KEY = 'message'
+
 const message = ref<string>('')
 const files = ref<FileDetail[]>([])
 const tag = ref<string>('')
@@ -124,7 +126,7 @@ const updateStatus = async (file: FileDetail) => {
   return file
 };
 
-function addFile(file: File) {
+const addFile = (file: File) => {
   if (files.value.find(f => f.path === file.path)) {
     return;
   }
@@ -133,6 +135,26 @@ function addFile(file: File) {
   updateStatus(detail).then(() => {
     files.value = [...files.value];
   });
+}
+
+const cvsAddFile = async (file: FileDetail) => {
+  antMessage.loading({content: `添加 ${file.name} 中...`, key: MESSAGE_KEY, duration: 0});
+  await cvs.add(file.path)
+}
+
+const cvsCommitFile = async (file: FileDetail, message: string) => {
+  antMessage.loading({content: `提交 ${file.name} 中...`, key: MESSAGE_KEY, duration: 0});
+  await cvs.commit(file.path, message)
+}
+
+const cvsUpdateTag = async (file: FileDetail, tag: string) => {
+  antMessage.loading({content: `更新 ${file.name} TAG中...`, key: MESSAGE_KEY, duration: 0});
+  await cvs.updateTag(file.path, tag)
+}
+
+const cvsUpdate = async (file: FileDetail) => {
+  antMessage.loading({content: `更新 ${file.name} 中...`, key: MESSAGE_KEY, duration: 0});
+  await cvs.update(file.path)
 }
 
 const onTagSelect = (value: string) => {
@@ -175,7 +197,7 @@ const onFileOpen = (path: string) => {
 
 const onCommit = async () => {
   const filesValue = files.value
-  const filesToCommit = filesValue.filter(f => f.selected)
+  const filesToCommit: FileDetail[] = filesValue.filter(f => f.selected)
   if (!filesToCommit.length) {
     antMessage.error('请选择文件')
     return
@@ -189,7 +211,7 @@ const onCommit = async () => {
     return
   }
   buttonState.commitLoading = true
-  const messageKey = 'commit';
+  const messageKey = MESSAGE_KEY;
   antMessage.loading({content: '提交中...', key: messageKey, duration: 0});
   console.log('commit file:', filesToCommit)
   console.log('commit message:', message.value)
@@ -198,18 +220,17 @@ const onCommit = async () => {
     console.log('committing', file.path)
     try {
       const status = await cvs.getStatus(file.path)
-      antMessage.loading({content: `提交 ${file.name} 中...`, key: messageKey, duration: 0});
       if (status === cvs.STATUS.ADDED || status === cvs.STATUS.MODIFIED || status === cvs.STATUS.REMOVED) {
-        await cvs.commit(file.path, message.value)
+        await cvsCommitFile(file, message.value)
       } else if (status === cvs.STATUS.UNKNOWN) {
-        await cvs.add(file.path)
-        await cvs.commit(file.path, message.value)
+        await cvsAddFile(file)
+        await cvsCommitFile(file, message.value)
       } else if (status === cvs.STATUS.CONFLICT) {
         await renameFile(file.path, file.path + '.bak')
-        await cvs.update(file.path)
+        await cvsUpdate(file)
         await deleteFile(file.path)
         await renameFile(file.path + '.bak', file.path)
-        await cvs.commit(file.path, message.value)
+        await cvsCommitFile(file, message.value)
       }
     } catch (e: any) {
       console.error(e)
@@ -237,11 +258,11 @@ const onCommit = async () => {
     await updateStatus(file)
   }
 
+  antMessage.loading({content: '获取清单中...', key: messageKey, duration: 0});
+
   await showHistoryDialog(filesToCommit)
 
   console.log('commit done')
-
-  antMessage.loading({content: '获取清单中...', key: messageKey, duration: 0});
 
   let tagsValue = TagStore.addTag(tag.value)
   TagStore.setTagFiles(tag.value, filesValue)
