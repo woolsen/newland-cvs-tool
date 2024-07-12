@@ -7,6 +7,7 @@ import TagStore from "./store/tag";
 import {CompleteText, FileDetail, FileStatus, StatusInfo} from "./utils/bean";
 import {CloseOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons-vue';
 import {checkFileExists, deleteFile, openFile, renameFile} from "./utils/file";
+import TagHistoryItem from "./components/tag-history-item.vue";
 
 
 const STATUS_INFO: { [key in FileStatus]: StatusInfo } = {
@@ -123,33 +124,6 @@ const updateStatus = async (file: FileDetail) => {
   return file
 };
 
-const onTagSelect = (value: string) => {
-  tag.value = value
-};
-
-const checkoutTag = (value: string) => {
-  tag.value = value
-  const filesValue = TagStore.getTagFiles(tag.value)
-  if (filesValue.length) {
-    files.value = filesValue
-  }
-};
-
-const onTagDelete = (value: string) => {
-  TagStore.removeTag(value)
-  tags.value = TagStore.getTags()
-};
-
-const handleDrop = (e: DragEvent) => {
-  e.preventDefault()
-  const eFiles = e.dataTransfer?.files
-  if (eFiles && eFiles.length) {
-    for (let i = 0; i < eFiles.length; i++) {
-      addFile(eFiles[i])
-    }
-  }
-}
-
 function addFile(file: File) {
   if (files.value.find(f => f.path === file.path)) {
     return;
@@ -161,18 +135,45 @@ function addFile(file: File) {
   });
 }
 
-const handleDelete = (path: Key) => {
+const onTagSelect = (value: string) => {
+  tag.value = value
+};
+
+const onTagHistoryCheck = (value: string) => {
+  tag.value = value
+  const filesValue = TagStore.getTagFiles(tag.value)
+  if (filesValue.length) {
+    files.value = filesValue
+  }
+};
+
+const onTagHistoryDelete = (value: string) => {
+  TagStore.removeTag(value)
+  tags.value = TagStore.getTags()
+};
+
+const onFileDrop = (e: DragEvent) => {
+  e.preventDefault()
+  const eFiles = e.dataTransfer?.files
+  if (eFiles && eFiles.length) {
+    for (let i = 0; i < eFiles.length; i++) {
+      addFile(eFiles[i])
+    }
+  }
+}
+
+const onFileDelete = (path: Key) => {
   const index = files.value.findIndex(f => f.path === path)
   if (index >= 0) {
     files.value.splice(index, 1)
   }
 }
 
-const handleOpenFile = (path: string) => {
+const onFileOpen = (path: string) => {
   openFile(path as string)
 }
 
-const handleCommit = async () => {
+const onCommit = async () => {
   const filesValue = files.value
   const filesToCommit = filesValue.filter(f => f.selected)
   if (!filesToCommit.length) {
@@ -250,7 +251,7 @@ const handleCommit = async () => {
   antMessage.success({content: '提交完成', key: messageKey, duration: 2});
 }
 
-const handleHistory = async () => {
+const onHistory = async () => {
   const filesValue = files.value
   const filesToCommit = filesValue.filter(f => f.selected)
   if (!filesToCommit.length) {
@@ -294,7 +295,7 @@ const reloadFileList = async () => {
   TagStore.setTagFiles(tag.value, files.value)
 }
 
-const handleAddFile = () => {
+const onAddFile = () => {
   const input = document.createElement('input')
   input.type = 'file'
   input.multiple = true
@@ -315,16 +316,17 @@ const handleAddFile = () => {
   <div style="display: flex; flex-direction: row">
     <a-col>
       <div class="tag-history-title">提交历史</div>
-      <div v-for="tag in tags" :key="tag" class="tag-history" @click="() => checkoutTag(tag)">
-        {{ tag }}
-      </div>
+      <tag-history-item v-for="tag in tags" :key="tag"
+                        :tag="tag"
+                        @click="() => onTagHistoryCheck(tag)"
+                        @delete="() => onTagHistoryDelete(tag)"/>
     </a-col>
     <div class="divider"/>
     <a-col style="width: 100%">
       <a-row style="width: 100%; margin-bottom: 8px">
-        <a-button :icon="h(PlusOutlined)" type="primary" @click="handleAddFile">添加文件</a-button>
+        <a-button :icon="h(PlusOutlined)" type="primary" @click="onAddFile">添加文件</a-button>
       </a-row>
-      <div style="width: 100%" @dragover.prevent="() => {}" @drop.prevent="handleDrop">
+      <div style="width: 100%" @dragover.prevent="() => {}" @drop.prevent="onFileDrop">
         <a-table :columns="columns" :data-source="files" :pagination="false"
                  :row-selection="rowSelection"
                  rowKey="path" size="small">
@@ -349,10 +351,10 @@ const handleAddFile = () => {
             <template v-else-if="column.dataIndex === 'action'">
               <span>
                 <template v-if="record.status !== 'not-found'">
-                  <a @click="() => handleOpenFile(record.path)">打开</a>
+                  <a @click="() => onFileOpen(record.path)">打开</a>
                   <a-divider type="vertical"/>
                 </template>
-                <a @click="() => handleDelete(record.path)">删除</a>
+                <a @click="() => onFileDelete(record.path)">删除</a>
               </span>
             </template>
           </template>
@@ -376,18 +378,18 @@ const handleAddFile = () => {
             <template #option="item">
               <div style="display: flex; justify-content: space-between; align-items: center">
                 <span>{{ item.value }}</span>
-                <close-outlined @click.prevent="() => onTagDelete(item.value)"/>
+                <close-outlined @click.prevent="() => onTagHistoryDelete(item.value)"/>
               </div>
             </template>
           </a-auto-complete>
         </a-form-item>
         <a-form-item style="margin-left: 80px">
           <a-button :loading="buttonState.commitLoading"
-                    type="primary" @click="handleCommit">提交&TAG
+                    type="primary" @click="onCommit">提交&TAG
           </a-button>
           <a-button :loading="buttonState.historyLoading"
                     style="margin-left: 8px"
-                    type="default" @click="handleHistory">获取清单
+                    type="default" @click="onHistory">获取清单
           </a-button>
         </a-form-item>
       </a-form>
@@ -408,22 +410,10 @@ const handleAddFile = () => {
   margin-right: 1rem;
 }
 
-.tag-history {
-  font-size: 14px;
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-
 .tag-history-title {
   font-size: 16px;
   font-weight: bold;
   width: 200px;
   margin-bottom: 8px;
-}
-
-.tag-history:hover {
-  cursor: pointer;
-  color: #1890ff;
-  background: #f0f0f0;
 }
 </style>
