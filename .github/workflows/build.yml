@@ -39,9 +39,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Artifact
+      - name: Upload Artifact 7z
         uses: actions/upload-artifact@v3
         with:
-          name: release_on_${{ matrix. os }}
-          path: release/
+          name: ${{ matrix.os }}-7z
+          path: release/*/*.7z
+          retention-days: 5
+
+      - name: Upload Artifact exe
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.os }}-exe
+          path: release/*/*.exe
           retention-days: 5
