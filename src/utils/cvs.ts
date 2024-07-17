@@ -78,7 +78,7 @@ async function getHistory(filePath: string): Promise<string> {
     return '';
   }
   const dir = filePath.substring(0, filePath.lastIndexOf(fileName));
-  return await cmd(`cvs history -w -c -l ${fileName}`, dir);
+  return (await cmd(`cvs history -w -c -l ${fileName}`, dir)).trim();
 }
 
 /**

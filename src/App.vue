@@ -296,7 +296,7 @@ const showHistoryDialog = async (files: FileDetail[]) => {
   }
   modal.info({
     title: '提交清单',
-    content: historyStr,
+    content: h('pre', historyStr),
     width: '90%',
     okText: '好的',
   });
