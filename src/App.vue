@@ -295,7 +295,7 @@ const showHistoryDialog = async (files: FileDetail[]) => {
     historyStr += await cvs.getHistory(file.path) + '\n'
   }
   modal.info({
-    title: '提交清单',
+    title: `${tag.value} 提交清单`,
     content: h('pre', historyStr),
     width: '90%',
     okText: '好的',
