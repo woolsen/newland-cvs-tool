@@ -8,6 +8,7 @@ import {CompleteText, FileDetail, FileStatus, StatusInfo} from "./utils/bean";
 import {CloseOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons-vue';
 import {checkFileExists, deleteFile, openFile, renameFile} from "./utils/file";
 import TagHistoryItem from "./components/tag-history-item.vue";
+import PersistentCheckbox from "./components/persistent-checkbox.vue";
 
 
 const STATUS_INFO: { [key in FileStatus]: StatusInfo } = {
@@ -71,6 +72,10 @@ onMounted(() => {
   files.value = TagStore.getTagFiles(tag.value)
   rowSelection.selectedRowKeys = files.value.filter(f => f.selected).map(f => f.path)
 })
+
+// 仅显示文件名
+const defaultShowOnlyFilename = false
+const showOnlyFilename = ref(defaultShowOnlyFilename)
 
 const columns: TableProps<FileDetail>['columns'] = [
   {
@@ -368,15 +373,22 @@ const onAddFile = () => {
     </a-col>
     <div class="divider"/>
     <a-col style="width: 100%">
-      <a-row style="width: 100%; margin-bottom: 8px">
-        <a-button :icon="h(PlusOutlined)" type="primary" @click="onAddFile">添加文件</a-button>
-        <a-button v-if="hasSelected" :icon="h(ReloadOutlined)" style="margin-left: 8px" @click="refreshSelectedStatus">
-          刷新状态
-        </a-button>
-        <a-button v-if="hasSelected" :icon="h(DeleteOutlined)" danger style="margin-left: 8px"
-                  @click="() => onSelectedFileDelete()">
-          批量删除
-        </a-button>
+      <a-row align="middle" justify="space-between" style="width: 100%; margin-bottom: 8px">
+        <a-space>
+          <a-button :icon="h(PlusOutlined)" type="primary" @click="onAddFile">添加文件</a-button>
+          <a-button v-if="hasSelected" :icon="h(ReloadOutlined)" style="margin-left: 8px"
+                    @click="refreshSelectedStatus">
+            刷新状态
+          </a-button>
+          <a-button v-if="hasSelected" :icon="h(DeleteOutlined)" danger style="margin-left: 8px"
+                    @click="() => onSelectedFileDelete()">
+            批量删除
+          </a-button>
+        </a-space>
+        <PersistentCheckbox :default-check="defaultShowOnlyFilename" storage-key="showFullPath"
+                            @change="checked => {showOnlyFilename = checked}">
+          仅显示文件名
+        </PersistentCheckbox>
       </a-row>
       <div style="width: 100%" @dragover.prevent="() => {}" @drop.prevent="onFileDrop">
         <a-table :columns="columns" :data-source="files" :pagination="false"
@@ -392,7 +404,10 @@ const onAddFile = () => {
           </template>
           <template #bodyCell="{ column, record }">
             <template v-if="column.dataIndex === 'path'">
-              <div style="word-break: break-all;">{{ record.path }}</div>
+              <div style="word-break: break-all;">{{
+                  showOnlyFilename ? record.path.split(/([\\/])/).pop() : record.path
+                }}
+              </div>
             </template>
             <template v-if="column.dataIndex === 'status'">
               <a-spin v-if="record.status === 'loading'"/>
