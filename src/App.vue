@@ -302,18 +302,26 @@ const showHistoryDialog = async (files: FileDetail[]) => {
   });
 }
 
-const reloadFileList = async () => {
-  files.value = files.value.map(f => {
+const refreshSelectedStatus = async () => {
+  await refreshFileStatus(files.value.filter(f => f.selected))
+  TagStore.setTagFiles(tag.value, files.value)
+}
+
+const refreshAllStatus = async () => {
+  await refreshFileStatus(files.value)
+  TagStore.setTagFiles(tag.value, files.value)
+}
+
+const refreshFileStatus = async (files: FileDetail[]) => {
+  antMessage.loading({content: '文件状态刷新中...', key: 'reload', duration: 0});
+  files = files.map(f => {
     f.status = 'loading'
     return f
   })
-  antMessage.loading({content: '文件状态刷新中...', key: 'reload', duration: 0});
-  for (let file of files.value) {
+  for (let file of files) {
     await updateStatus(file)
   }
-  files.value = [...files.value]
   antMessage.success({content: '文件状态刷新完成', key: 'reload', duration: 2});
-  TagStore.setTagFiles(tag.value, files.value)
 }
 
 const onAddFile = () => {
@@ -346,6 +354,7 @@ const onAddFile = () => {
     <a-col style="width: 100%">
       <a-row style="width: 100%; margin-bottom: 8px">
         <a-button :icon="h(PlusOutlined)" type="primary" @click="onAddFile">添加文件</a-button>
+        <a-button :icon="h(ReloadOutlined)" style="margin-left: 8px" @click="refreshSelectedStatus">刷新状态</a-button>
       </a-row>
       <div style="width: 100%" @dragover.prevent="() => {}" @drop.prevent="onFileDrop">
         <a-table :columns="columns" :data-source="files" :pagination="false"
@@ -355,7 +364,7 @@ const onAddFile = () => {
             <template v-if="column.key === 'status'">
             <span>
               {{ column.title }}
-              <reload-outlined @click="() => reloadFileList()"/>
+              <reload-outlined @click="() => refreshAllStatus()"/>
             </span>
             </template>
           </template>
