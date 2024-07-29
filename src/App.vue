@@ -5,7 +5,7 @@ import {Key, type TableRowSelection} from "ant-design-vue/es/table/interface";
 import {cvs, InvalidCVSRootError, STATUS} from "./utils/cvs";
 import TagStore from "./store/tag";
 import {CompleteText, FileDetail, FileStatus, StatusInfo} from "./utils/bean";
-import {CloseOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons-vue';
+import {CloseOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons-vue';
 import {checkFileExists, deleteFile, openFile, renameFile} from "./utils/file";
 import TagHistoryItem from "./components/tag-history-item.vue";
 
@@ -48,11 +48,16 @@ const rowSelection: TableRowSelection<FileDetail> = reactive({
     console.log('selectedRowKeys changed: ', selectedRowKeys);
     files.value.forEach(f => f.selected = selectedRowKeys.includes(f.path))
     rowSelection.selectedRowKeys = selectedRowKeys
+    console.log('hasSelected: ', hasSelected.value)
   },
   getCheckboxProps: (record: FileDetail) => ({
     disabled: !STATUS_INFO[record.status as STATUS].selectable,
   }),
 })
+const hasSelected = computed(() => {
+  const selectedRowKeys = rowSelection.selectedRowKeys
+  return selectedRowKeys && selectedRowKeys.length > 0;
+});
 
 const [modal, contextHolder] = Modal.useModal();
 
@@ -72,6 +77,7 @@ const columns: TableProps<FileDetail>['columns'] = [
     title: '文件路径',
     dataIndex: 'path',
     key: 'path',
+    sorter: (a: FileDetail, b: FileDetail) => a.path.localeCompare(b.path),
   },
   {
     title: '状态',
@@ -180,6 +186,16 @@ const onFileDrop = (e: DragEvent) => {
   if (eFiles && eFiles.length) {
     for (let i = 0; i < eFiles.length; i++) {
       addFile(eFiles[i])
+    }
+  }
+}
+
+const onSelectedFileDelete = () => {
+  const selectedFiles = files.value.filter(f => f.selected)
+  for (let file of selectedFiles) {
+    const index = files.value.findIndex(f => f.path === file.path)
+    if (index >= 0) {
+      files.value.splice(index, 1)
     }
   }
 }
@@ -354,7 +370,13 @@ const onAddFile = () => {
     <a-col style="width: 100%">
       <a-row style="width: 100%; margin-bottom: 8px">
         <a-button :icon="h(PlusOutlined)" type="primary" @click="onAddFile">添加文件</a-button>
-        <a-button :icon="h(ReloadOutlined)" style="margin-left: 8px" @click="refreshSelectedStatus">刷新状态</a-button>
+        <a-button v-if="hasSelected" :icon="h(ReloadOutlined)" style="margin-left: 8px" @click="refreshSelectedStatus">
+          刷新状态
+        </a-button>
+        <a-button v-if="hasSelected" :icon="h(DeleteOutlined)" danger style="margin-left: 8px"
+                  @click="() => onSelectedFileDelete()">
+          批量删除
+        </a-button>
       </a-row>
       <div style="width: 100%" @dragover.prevent="() => {}" @drop.prevent="onFileDrop">
         <a-table :columns="columns" :data-source="files" :pagination="false"
