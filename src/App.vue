@@ -6,9 +6,10 @@ import {cvs, InvalidCVSRootError, STATUS} from "./utils/cvs";
 import TagStore from "./store/tag";
 import {CompleteText, FileDetail, FileStatus, StatusInfo} from "./utils/bean";
 import {CloseOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons-vue';
-import {checkFileExists, deleteFile, openFile, renameFile} from "./utils/file";
+import {checkFileExists, deleteFile, getDirectoryPath, getFilename, openFile, renameFile} from "./utils/file";
 import TagHistoryItem from "./components/tag-history-item.vue";
 import PersistentCheckbox from "./components/persistent-checkbox.vue";
+import _ from "lodash";
 
 
 const STATUS_INFO: { [key in FileStatus]: StatusInfo } = {
@@ -312,11 +313,12 @@ const onHistory = async () => {
 
 const showHistoryDialog = async (files: FileDetail[]) => {
   let historyStr = ''
-  for (let file of files) {
-    historyStr += await cvs.getHistory(file.path) + '\n'
+  const groupedFiles: Record<string, FileDetail[]> = _.groupBy(files, (f: FileDetail) => getDirectoryPath(f.path))
+  for (let [dir, files] of Object.entries(groupedFiles)) {
+    historyStr += await cvs.getHistory(files.map(f => getFilename(f.path)), dir) + '\n'
   }
   modal.info({
-    title: `${tag.value} 提交清单`,
+    title: `${tag.value}提交清单`,
     content: h('pre', historyStr),
     width: '90%',
     okText: '好的',

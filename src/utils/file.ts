@@ -31,3 +31,15 @@ export async function renameFile(oldPath: string, newPath: string) {
 export async function deleteFile(path: string) {
   await window.ipcRenderer.invoke('delete-file', path)
 }
+
+export function getDirectoryPath(filePath: string): string {
+  // 将反斜杠替换为正斜杠，标准化路径分隔符
+  const normalizedPath = filePath.replace(/\\/g, '/');
+  const parts = normalizedPath.split('/');
+  parts.pop(); // 移除文件名部分
+  return parts.join('/');
+}
+
+export function getFilename(filePath: string): string {
+  return filePath.split(/([\\/])/).pop() || ''
+}

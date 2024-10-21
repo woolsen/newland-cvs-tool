@@ -72,13 +72,19 @@ async function updateTag(filePath: string, tag: string) {
   return stdout.startsWith('T');
 }
 
-async function getHistory(filePath: string): Promise<string> {
-  const fileName = filePath.split(/([\\/])/).pop();
-  if (!fileName) {
+async function getHistory(filename: string | string[], dir: string): Promise<string> {
+  let filenameStr;
+  if (Array.isArray(filename)) {
+    filenameStr = filename.join(' ');
+  } else {
+    filenameStr = filename;
+  }
+  if (!filenameStr) {
     return '';
   }
-  const dir = filePath.substring(0, filePath.lastIndexOf(fileName));
-  return (await cmd(`cvs history -w -c -l ${fileName}`, dir)).trim();
+  console.log(`dir: ${dir}`)
+  console.log(`cvs history -w -c -l ${filenameStr}`)
+  return (await cmd(`cvs history -w -c -l ${filenameStr}`, dir)).trim();
 }
 
 /**
