@@ -1,4 +1,4 @@
-import {STATUS} from "./cvs";
+import {STATUS} from "./cvs-utils";
 
 export type FileStatus = STATUS | 'loading' | 'error' | 'not-found' | 'not-cvs-file'
 

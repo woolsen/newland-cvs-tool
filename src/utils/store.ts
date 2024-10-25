@@ -1,11 +1,11 @@
 class StoreUtil {
   // 设置数据
-  public static set(key: string, value: any): void {
+  static set(key: string, value: any): void {
     localStorage.setItem(key, JSON.stringify(value));
   }
 
   // 获取数据
-  public static get<T>(key: string, defaultValue?: T): T | null {
+  static get<T>(key: string, defaultValue?: T): T | null {
     const item = localStorage.getItem(key);
     if (item) {
       try {
@@ -19,12 +19,12 @@ class StoreUtil {
   }
 
   // 删除数据
-  public static delete(key: string): void {
+  static delete(key: string): void {
     localStorage.removeItem(key);
   }
 
   // 清空所有数据
-  public static clear(): void {
+  static clear(): void {
     localStorage.clear();
   }
 }

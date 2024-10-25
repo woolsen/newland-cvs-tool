@@ -49,7 +49,7 @@ const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
 async function createWindow() {
   win = new BrowserWindow({
-    title: 'CVS Tool',
+    title: 'CVS Tool by 翁凯强',
     icon: path.join(process.env.VITE_PUBLIC, 'newland.ico'),
     width: 1024,  // 窗口宽度
     height: 768,  // 窗口高度

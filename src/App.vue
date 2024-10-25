@@ -2,14 +2,13 @@
 import {computed, ComputedRef, h, onMounted, reactive, ref} from 'vue'
 import {message as antMessage, Modal, notification, TableProps} from "ant-design-vue";
 import {Key, type TableRowSelection} from "ant-design-vue/es/table/interface";
-import {cvs, InvalidCVSRootError, STATUS} from "./utils/cvs";
+import {CvsUtils, InvalidCVSRootError, STATUS} from "./utils/cvs-utils";
 import TagStore from "./store/tag";
 import {CompleteText, FileDetail, FileStatus, StatusInfo} from "./utils/bean";
 import {CloseOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons-vue';
 import {checkFileExists, deleteFile, getDirectoryPath, getFilename, openFile, renameFile} from "./utils/file";
 import TagHistoryItem from "./components/tag-history-item.vue";
 import PersistentCheckbox from "./components/persistent-checkbox.vue";
-import _ from "lodash";
 
 
 const STATUS_INFO: { [key in FileStatus]: StatusInfo } = {
@@ -112,7 +111,7 @@ const updateStatus = async (file: FileDetail) => {
     return file
   }
   try {
-    file.status = await cvs.getStatus(file.path)
+    file.status = await CvsUtils.getStatus(file.path)
     file.selected = STATUS_INFO[file.status as STATUS].selectable ? file.selected : false
   } catch (e: any) {
     console.error(e)
@@ -149,24 +148,19 @@ const addFile = (file: File) => {
   });
 }
 
-const cvsAddFile = async (file: FileDetail) => {
+const CvsAddFile = async (file: FileDetail) => {
   antMessage.loading({content: `添加 ${file.name} 中...`, key: MESSAGE_KEY, duration: 0});
-  await cvs.add(file.path)
+  await CvsUtils.add(file.path)
 }
 
-const cvsCommitFile = async (file: FileDetail, message: string) => {
+const CvsCommitFile = async (file: FileDetail, message: string) => {
   antMessage.loading({content: `提交 ${file.name} 中...`, key: MESSAGE_KEY, duration: 0});
-  await cvs.commit(file.path, message)
+  await CvsUtils.commit(file.path, message)
 }
 
-const cvsUpdateTag = async (file: FileDetail, tag: string) => {
-  antMessage.loading({content: `更新 ${file.name} TAG中...`, key: MESSAGE_KEY, duration: 0});
-  await cvs.updateTag(file.path, tag)
-}
-
-const cvsUpdate = async (file: FileDetail) => {
+const CvsUpdate = async (file: FileDetail) => {
   antMessage.loading({content: `更新 ${file.name} 中...`, key: MESSAGE_KEY, duration: 0});
-  await cvs.update(file.path)
+  await CvsUtils.update(file.path)
 }
 
 const onTagSelect = (value: string) => {
@@ -224,7 +218,8 @@ const onCommit = async () => {
     antMessage.error('请选择文件')
     return
   }
-  if (!tag.value) {
+  const tagValue = tag.value
+  if (!tagValue) {
     antMessage.error('TAG不能为空')
     return
   }
@@ -233,26 +228,28 @@ const onCommit = async () => {
     return
   }
   buttonState.commitLoading = true
-  const messageKey = MESSAGE_KEY;
-  antMessage.loading({content: '提交中...', key: messageKey, duration: 0});
+
   console.log('commit file:', filesToCommit)
   console.log('commit message:', message.value)
-  console.log('update tag:', tag.value)
+  console.log('update tag:', tagValue)
+
+  const grouped = groupFileByDir(filesToCommit)
+  antMessage.loading({content: '提交中...', key: MESSAGE_KEY, duration: 0});
   for (let file of filesToCommit) {
     console.log('committing', file.path)
     try {
-      const status = await cvs.getStatus(file.path)
-      if (status === cvs.STATUS.ADDED || status === cvs.STATUS.MODIFIED || status === cvs.STATUS.REMOVED) {
-        await cvsCommitFile(file, message.value)
-      } else if (status === cvs.STATUS.UNKNOWN) {
-        await cvsAddFile(file)
-        await cvsCommitFile(file, message.value)
-      } else if (status === cvs.STATUS.CONFLICT) {
+      const status = await CvsUtils.getStatus(file.path)
+      if (status === STATUS.ADDED || status === STATUS.MODIFIED || status === STATUS.REMOVED) {
+        await CvsCommitFile(file, message.value)
+      } else if (status === STATUS.UNKNOWN) {
+        await CvsAddFile(file)
+        await CvsCommitFile(file, message.value)
+      } else if (status === STATUS.CONFLICT) {
         await renameFile(file.path, file.path + '.bak')
-        await cvsUpdate(file)
+        await CvsUpdate(file)
         await deleteFile(file.path)
         await renameFile(file.path + '.bak', file.path)
-        await cvsCommitFile(file, message.value)
+        await CvsCommitFile(file, message.value)
       }
     } catch (e: any) {
       console.error(e)
@@ -262,27 +259,34 @@ const onCommit = async () => {
         duration: 2,
         placement: 'bottomRight'
       })
-      continue
+      return
     }
+  }
+
+  antMessage.loading({content: `更新TAG中...`, key: MESSAGE_KEY, duration: 0});
+  for (let dir in grouped) {
+    const filesInDir: string[] = grouped[dir]
     try {
-      antMessage.loading({content: `更新 ${file.name} TAG中...`, key: messageKey, duration: 0});
-      await cvs.updateTag(file.path, tag.value)
+      await CvsUtils.updateTag(filesInDir, dir, tagValue)
     } catch (e: any) {
-      console.error(e)
+      console.error(`更新TAG失败, dir: ${dir}, files: ${filesInDir}`, e)
       notification.error({
-        message: `更新 ${file.name} TAG失败`,
+        message: `更新TAG失败`,
         description: e.message,
         duration: 2,
         placement: 'bottomRight'
       })
-      continue
+      return
     }
+  }
+
+  for (let file of filesToCommit) {
     await updateStatus(file)
   }
 
-  antMessage.loading({content: '获取清单中...', key: messageKey, duration: 0});
+  antMessage.loading({content: '获取清单中...', key: MESSAGE_KEY, duration: 0});
 
-  await showHistoryDialog(filesToCommit)
+  await showHistoryDialog(grouped)
 
   console.log('commit done')
 
@@ -291,7 +295,7 @@ const onCommit = async () => {
   tags.value = tagsValue
   buttonState.commitLoading = false
 
-  antMessage.success({content: '提交完成', key: messageKey, duration: 2});
+  antMessage.success({content: '提交完成', key: MESSAGE_KEY, duration: 2});
 }
 
 const onHistory = async () => {
@@ -305,17 +309,18 @@ const onHistory = async () => {
   const messageKey = 'history';
   antMessage.loading({content: '获取清单中...', key: messageKey, duration: 0});
   console.log('get history file:', filesToCommit)
-  await showHistoryDialog(filesToCommit)
+  const grouped = groupFileByDir(filesValue)
+  await showHistoryDialog(grouped)
   antMessage.success({content: '获取清单完成', key: messageKey, duration: 2});
   console.log('get history done')
   buttonState.historyLoading = false
 }
 
-const showHistoryDialog = async (files: FileDetail[]) => {
+const showHistoryDialog = async (files: Record<string, string[]>) => {
   let historyStr = ''
-  const groupedFiles: Record<string, FileDetail[]> = _.groupBy(files, (f: FileDetail) => getDirectoryPath(f.path))
-  for (let [dir, files] of Object.entries(groupedFiles)) {
-    historyStr += await cvs.getHistory(files.map(f => getFilename(f.path)), dir) + '\n'
+  for (let dir in files) {
+    const filesInDir: string[] = files[dir]
+    historyStr += await CvsUtils.getHistory(filesInDir, dir) + '\n'
   }
   modal.info({
     title: `${tag.value}提交清单`,
@@ -360,6 +365,18 @@ const onAddFile = () => {
     }
   }
   input.click()
+}
+
+function groupFileByDir(files: FileDetail[]): Record<string, string[]> {
+  const result: Record<string, string[]> = {}
+  for (let file of files) {
+    const dir = getDirectoryPath(file.path)
+    if (!result[dir]) {
+      result[dir] = []
+    }
+    result[dir].push(getFilename(file.path))
+  }
+  return result
 }
 
 </script>
