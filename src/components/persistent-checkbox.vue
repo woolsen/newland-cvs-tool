@@ -32,7 +32,7 @@ export default defineComponent({
     const getInitialValue = () => {
       const savedValue = localStorage.getItem(key);
       if (savedValue) {
-        return  savedValue === 'true';
+        return savedValue === 'true';
       } else {
         return  typeof props.defaultCheck === 'boolean' ?
             props.defaultCheck :
@@ -41,6 +41,7 @@ export default defineComponent({
     };
 
     const checked = ref(getInitialValue());
+    emit('change', getInitialValue());
 
     // 当复选框状态改变时，更新localStorage并发出更新事件
     const handleChange = (event: Event) => {

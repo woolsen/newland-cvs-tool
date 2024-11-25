@@ -404,7 +404,7 @@ function groupFileByDir(files: FileDetail[]): Record<string, string[]> {
             批量删除
           </a-button>
         </a-space>
-        <PersistentCheckbox :default-check="defaultShowOnlyFilename" storage-key="showFullPath"
+        <PersistentCheckbox :default-check="true" storage-key="showFullPath"
                             @change="checked => {showOnlyFilename = checked}">
           仅显示文件名
         </PersistentCheckbox>
