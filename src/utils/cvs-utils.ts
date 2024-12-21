@@ -26,6 +26,7 @@ export class CvsUtils {
   static async getStatus(filePath: string): Promise<STATUS> {
     const fileName = filePath.split(/([\\/])/).pop()!;
     const dir = filePath.substring(0, filePath.lastIndexOf(fileName));
+    console.log(`cvs status -v ${fileName}`)
     try {
       const stdout = await cmd(`cvs status -v ${fileName}`, dir);
       console.log(stdout)
@@ -94,7 +95,7 @@ export class CvsUtils {
     }
     console.log(`dir: ${dir}`)
     console.log(`cvs history -w -c -l ${filenameStr}`)
-    return (await cmd(`cvs history -w -c -l ${filenameStr}`, dir)).trim();
+    return (await cmd(`cvs history -alc ${filenameStr}`, dir)).trim();
   }
 
   /**
