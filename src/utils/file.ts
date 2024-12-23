@@ -1,3 +1,4 @@
+import {shell} from "electron";
 
 /**
  * Open file in explorer
@@ -5,6 +6,10 @@
  */
 export async function openFile(path: string) {
   await window.ipcRenderer.invoke('open-file', path)
+}
+
+export function openFolder(filePath: string) {
+  window.ipcRenderer.invoke('open-folder', filePath);
 }
 
 /**

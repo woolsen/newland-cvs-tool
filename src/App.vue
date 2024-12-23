@@ -6,7 +6,15 @@ import {CvsUtils, InvalidCVSRootError, STATUS} from "./utils/cvs-utils";
 import TagStore from "./store/tag";
 import {CompleteText, FileDetail, FileStatus, StatusInfo} from "./utils/bean";
 import {CloseOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined} from '@ant-design/icons-vue';
-import {checkFileExists, deleteFile, getDirectoryPath, getFilename, openFile, renameFile} from "./utils/file";
+import {
+  checkFileExists,
+  deleteFile,
+  getDirectoryPath,
+  getFilename,
+  openFile,
+  openFolder,
+  renameFile
+} from "./utils/file";
 import TagHistoryItem from "./components/tag-history-item.vue";
 import PersistentCheckbox from "./components/persistent-checkbox.vue";
 
@@ -326,7 +334,13 @@ const showHistoryDialog = async (files: Record<string, string[]>) => {
     title: `${tag.value}提交清单`,
     content: h('pre', historyStr),
     width: '90%',
+    okCancel: true,
     okText: '好的',
+    cancelText: '复制到剪切板',
+    onCancel: () => {
+      navigator.clipboard.writeText(historyStr)
+      antMessage.success('已复制到剪切板')
+    }
   });
 }
 
@@ -379,6 +393,10 @@ function groupFileByDir(files: FileDetail[]): Record<string, string[]> {
   return result
 }
 
+const onFileOpenFolder = (filePath: string) => {
+  openFolder(filePath);
+};
+
 </script>
 
 <template>
@@ -423,10 +441,24 @@ function groupFileByDir(files: FileDetail[]): Record<string, string[]> {
           </template>
           <template #bodyCell="{ column, record }">
             <template v-if="column.dataIndex === 'path'">
-              <div style="word-break: break-all;">{{
-                  showOnlyFilename ? record.path.split(/([\\/])/).pop() : record.path
-                }}
-              </div>
+              <a-dropdown trigger="['contextmenu']">
+                <template #overlay>
+                  <a-menu>
+                    <a-menu-item key="openFile" @click="() => onFileOpen(record.path)">
+                      打开
+                    </a-menu-item>
+                    <a-menu-item key="openFolder" @click="() => onFileOpenFolder(record.path)">
+                      打开文件夹
+                    </a-menu-item>
+                    <a-menu-item key="deleteFile" @click="() => onFileDelete(record.path)">
+                      删除
+                    </a-menu-item>
+                  </a-menu>
+                </template>
+                <span style="cursor: context-menu">
+                  {{ showOnlyFilename ? record.path.split(/([\\/])/).pop() : record.path }}
+                </span>
+              </a-dropdown>
             </template>
             <template v-if="column.dataIndex === 'status'">
               <a-spin v-if="record.status === 'loading'"/>
@@ -485,10 +517,6 @@ function groupFileByDir(files: FileDetail[]): Record<string, string[]> {
 </template>
 
 <style scoped>
-.ant-form-item {
-  margin-bottom: 8px;
-}
-
 .divider {
   width: 1px;
   background: #f0f0f0;

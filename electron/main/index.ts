@@ -186,6 +186,11 @@ ipcMain.handle('cmd', async (event, command: string, cwd: string) => {
   });
 });
 
+
+ipcMain.handle('open-folder', async (event, filePath) => {
+  shell.showItemInFolder(filePath);
+});
+
 function cmd(command: string, callback: (error: Error | null, stdout: string, stderr: string) => void) {
   exec(command, {encoding: 'buffer'}, (error, stdout, stderr) => {
     const stdoutGbk = iconv.decode(stdout, 'gbk');
